@@ -1,0 +1,10 @@
+logmap-log.out
+.project
+.settings/
+/target/
+/test-classes/
+/classes/
+.classpath
+.vscode/
+/.apt_generated/
+/.apt_generated_tests/
