@@ -42,9 +42,6 @@ import uk.ac.ox.krr.logmap2.interactive.*;
 import uk.ac.ox.krr.logmap2.interactive.objects.MappingObjectInteractivity;
 import uk.ac.ox.krr.logmap2.mappings.MappingManager;
 import uk.ac.ox.krr.logmap2.mappings.CandidateMappingManager;
-
-import uk.ac.ox.krr.logmap2.io.LogOutput;
-
 import uk.ac.ox.krr.logmap2.statistics.*;
 
 
@@ -692,22 +689,28 @@ public class LogMap2Core {
 					//System.out.println(dir_mapping);
 								
 					//TODO No need to reverse ids. Done in OWLAlignmentFormat
-					//if (dir_mapping!=Utilities.R2L){
+					// if (dir_mapping!=Utilities.R2L){
+
+					// getDirMapping reports R2L relative to the smaller-id-first order and the writer's R2L branch reverses its arguments
+					// the ids are swapped here as saveExtractedMappings does for the files
+					
+					if (dir_mapping!=Utilities.R2L){
 						owlformat.addClassMapping2Output(
-								getIRI4ConceptIdentifier(ide1),
-								getIRI4ConceptIdentifier(ide2),
-								dir_mapping,
-								getConfidence4ConceptMapping(ide1, ide2)
-								);
-					/*}
-					else{
+							getIRI4ConceptIdentifier(ide1),
+							getIRI4ConceptIdentifier(ide2),
+							dir_mapping,
+							getConfidence4ConceptMapping(ide1, ide2)
+						);
+					} 
+					else 
+					{
 						owlformat.addClassMapping2Output(
-								getIRI4ConceptIdentifier(ide2),
-								getIRI4ConceptIdentifier(ide1),								
-								dir_mapping,
-								getConfidence4ConceptMapping(ide1, ide2)
-							);
-					}*/
+							getIRI4ConceptIdentifier(ide2),
+							getIRI4ConceptIdentifier(ide1),								
+							dir_mapping,
+							getConfidence4ConceptMapping(ide1, ide2)
+						);
+					}
 				}
 			}
 		}
