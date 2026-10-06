@@ -243,7 +243,7 @@ public class AnchorAssessment {
 					mappings2repair,
 					hornMappings2Remove,
 					mapping_extractor.getObjectPropertyAnchors()
-				)
+				), restrictionReasoning.top()
 			);
 		
 		
