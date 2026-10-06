@@ -593,6 +593,11 @@ public class LogMap2_RepairFacility {
 		
 		
 		init = Calendar.getInstance().getTimeInMillis();
+		// Global conflictiveness, as on the matcher path: equal-size plans are ordered by how many
+		// unsatisfiable classes each direction is blamed for before the confidence tie-break
+		if (Parameters.extractGlobal_D_G_Info){
+			mapping_assessment.CountSatisfiabilityOfIntegration_DandG(mapping_manager.getLogMapMappings());
+		}
 		mapping_assessment.CheckSatisfiabilityOfIntegration_DandG(mapping_manager.getLogMapMappings());
 		fin = Calendar.getInstance().getTimeInMillis();
 		LogOutput.print("\tTime cleaning reliable class mappings Dowling and Gallier (s): " + (float)((double)fin-(double)init)/1000.0);
@@ -721,6 +726,9 @@ public class LogMap2_RepairFacility {
 					
 					
 		init = Calendar.getInstance().getTimeInMillis();
+		if (Parameters.extractGlobal_D_G_Info){
+			mapping_assessment.CountSatisfiabilityOfIntegration_DandG(mapping_manager.getLogMapMappings());
+		}
 		mapping_assessment.CheckSatisfiabilityOfIntegration_DandG(mapping_manager.getLogMapMappings());
 		fin = Calendar.getInstance().getTimeInMillis();
 		LogOutput.print("\tTime cleaning class mappings Dowling and Gallier (s): " + (float)((double)fin-(double)init)/1000.0);
@@ -956,6 +964,7 @@ public class LogMap2_RepairFacility {
 		//So far only equivalences are considered
 		//if (map.getMappingDirection()==Utilities.EQ){
 			mapping_manager.addObjectPropertyAnchor(ide1, ide2);
+			mapping_manager.setObjectPropertyAnchorDirection(ide1, map.getMappingDirection()); //a cell read as < or > stays directed
 			mapping_manager.addObjectPropertyAnchorConfidence(ide1, map.getConfidence());
 		//}		
 	}
@@ -1123,7 +1132,7 @@ public class LogMap2_RepairFacility {
 				outPutFilesManager.addObjPropMapping2Files(
 							index.getIRIStr4ObjPropIndex(ide1),
 							index.getIRIStr4ObjPropIndex(mapping_manager.getObjectPropertyAnchors().get(ide1)),
-							Utilities.EQ, 
+							mapping_manager.getObjectPropertyAnchorDirection(ide1), 
 							mapping_manager.getConfidence4ObjectPropertyAnchor(ide1, mapping_manager.getObjectPropertyAnchors().get(ide1))//1.0
 						);
 			}
@@ -1418,7 +1427,7 @@ public class LogMap2_RepairFacility {
 								index.getIRIStr4ObjPropIndex(ide1),
 								index.getIRIStr4ObjPropIndex(mapping_manager.getObjectPropertyAnchors().get(ide1)),								 
 								mapping_manager.getConfidence4ObjectPropertyAnchor(ide1, mapping_manager.getObjectPropertyAnchors().get(ide1)),
-								Utilities.EQ,
+								mapping_manager.getObjectPropertyAnchorDirection(ide1),
 								Utilities.OBJECTPROPERTIES));
 			}
 			//}

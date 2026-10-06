@@ -27,6 +27,9 @@ import java.util.PriorityQueue;
 import java.util.Queue;
 import java.util.Set;
 import java.util.Vector;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.TreeSet;
 
 import uk.ac.ox.krr.logmap2.Parameters;
 import uk.ac.ox.krr.logmap2.io.LogOutput;
@@ -36,7 +39,10 @@ import uk.ac.ox.krr.logmap2.mappings.CandidateMappingManager;
 import uk.ac.ox.krr.logmap2.repair.hornSAT.DowlingGallierHornSAT;
 import uk.ac.ox.krr.logmap2.repair.hornSAT.HornClause;
 import uk.ac.ox.krr.logmap2.repair.hornSAT.Link;
+import uk.ac.ox.krr.logmap2.repair.hornSAT.CorrespondenceDirection;
+import uk.ac.ox.krr.logmap2.repair.hornSAT.PropertyDirectionClause;
 import uk.ac.ox.krr.logmap2.repair.restrictions.RestrictionReasoning;
+import uk.ac.ox.krr.logmap2.utilities.Utilities;
 import uk.ac.ox.krr.logmap2.utilities.PrecomputeIndexCombination;
 import uk.ac.ox.krr.logmap2.io.*;
 
@@ -227,6 +233,7 @@ public class AnchorAssessment {
 			index.setSmallProjection4MappedEntities(mapped_entities);
 		}
 		
+		List<CorrespondenceDirection> propertyDirections = survivingPropertyDirections();
 			
 		dgSat = new DowlingGallierHornSAT(
 				index.getDirectSubClasses(useProjection),
@@ -242,12 +249,32 @@ public class AnchorAssessment {
 					mapping_extractor.getFixedMappings(),
 					mappings2repair,
 					hornMappings2Remove,
-					mapping_extractor.getObjectPropertyAnchors()
-				), restrictionReasoning.top()
+					propertyDirections
+				), 
+				propertyDirections, 
+				restrictionReasoning.top()
 			);
 		
 		
 	}
+
+
+	/**
+	 * The directions of the object property anchors the repair has not removed, in source order
+	 */
+	private List<CorrespondenceDirection> survivingPropertyDirections(){
+		List<CorrespondenceDirection> directions = new ArrayList<CorrespondenceDirection>();
+		for (int source : new TreeSet<Integer>(mapping_extractor.getObjectPropertyAnchors().keySet())){
+			int target = mapping_extractor.getObjectPropertyAnchors().get(source);
+			int direction = mapping_extractor.getObjectPropertyAnchorDirection(source);
+			if (direction!=Utilities.R2L)
+				directions.add(CorrespondenceDirection.ofObjectProperties(source, target));
+			if (direction!=Utilities.L2R)
+				directions.add(CorrespondenceDirection.ofObjectProperties(target, source));
+		}
+		return directions;
+	}
+	
 	
 	
 	/**
@@ -1162,9 +1189,22 @@ public class AnchorAssessment {
 				//There is a plan
 				unsatClasses2repaired.put(entity, true);
 				
-				hornMappings2Remove.addAll(selectedPlan.getMappings());//For future D&G settings
+				// hornMappings2Remove.addAll(selectedPlan.getMappings());//For future D&G settings
 				
 				for (HornClause clausemap : selectedPlan.getMappings()){ //For current D&G setting
+
+					//A property direction is applied at once (the next build reads the anchor's new state)
+					//and masked for the rest of this build; the class bookkeeping below is not for it
+					if (clausemap instanceof PropertyDirectionClause direction){
+						boolean sourceToTarget = mapping_extractor.getObjectPropertyAnchors().containsKey(direction.source());
+						int source = sourceToTarget ? direction.source() : direction.target();
+						mapping_extractor.removeObjectPropertyAnchorDirection(source, sourceToTarget);
+						dgSat.addGeneralLink2Ignore(direction.getLeftHS1(), direction.getLabel(), direction.getRightHS());
+						continue;
+					}
+					
+					hornMappings2Remove.add(clausemap);//For future D&G settings
+
 					//General!Ignorelinks
 					//TODO we add both sides to easy cleaning
 					//TODO Later weakened mappings will be assessed again
@@ -1301,7 +1341,13 @@ public class AnchorAssessment {
 		//LogOutput.print("\tISUB: " + ide1 + " - " + ide2 + " " + mapping_clause.getDirImplication());
 		//LogOutput.print("\tISUB: " + ide1 + " -> " + ide2 + " " + mapping_extractor.getISUB4Mapping(mapping_clause.getLeftHS1(), mapping_clause.getRightHS()));
 		//LogOutput.print("\tSCOPE:  " + ide1 + " -> " + ide2 + " " + mapping_extractor.getScope4Mapping(mapping_clause.getLeftHS1(), mapping_clause.getRightHS()));
-		
+
+		if (mapping_clause instanceof PropertyDirectionClause direction){
+			if (mapping_extractor.getObjectPropertyAnchors().containsKey(direction.source()))
+				return mapping_extractor.getConfidence4ObjectPropertyAnchor(direction.source(), direction.target());
+			return mapping_extractor.getConfidence4ObjectPropertyAnchor(direction.target(), direction.source());
+		}
+
 		return mapping_extractor.getConfidence4Mapping(mapping_clause.getLeftHS1(), mapping_clause.getRightHS());
 	}
 	

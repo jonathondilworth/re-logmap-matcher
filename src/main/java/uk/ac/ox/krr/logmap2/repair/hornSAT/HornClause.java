@@ -43,6 +43,7 @@ public class HornClause{
 	//public static int ONTO2=2;
 	public static final int FIXEDMAP=3;
 	public static final int RESTRICTION=4; //a clause from the restriction store or a derived link
+	public static final int PROPERTY_MAP=5; //one direction of a property correspondence under repair
 	
 	//DIR IMPLICATION
 	public static final int L2R=0; //P->Q
@@ -259,7 +260,11 @@ public class HornClause{
 	public boolean equals(HornClause hc){
 		
 		//For equality we do not consider the labels (it is dependent to the current d&g setting) 
+
+		if (hc == null || hc.getClass() != this.getClass()) //property and restriction clauses reuse these int fields
+			return false;
 		
+
 		if (leftHandSideSet.size()>0){
 			
 			if (//labelh!=hc.getLabel() || 

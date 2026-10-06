@@ -742,7 +742,7 @@ public class LogMap2Core {
 			owlformat.addObjPropMapping2Output(
 					getIRI4ObjectPropIdentifier(ide1),
 					getIRI4ObjectPropIdentifier(getObjectPropMappings().get(ide1)),
-					Utilities.EQ, 
+					mapping_extractor.getObjectPropertyAnchorDirection(ide1), 
 					getConfidence4ObjectPropMapping(ide1, getObjectPropMappings().get(ide1))//1.0
 				);
 		}
@@ -1836,7 +1836,7 @@ public class LogMap2Core {
 					outPutFilesManager.addObjPropMapping2Files(
 							getIRI4ObjectPropIdentifier(ide1),
 							getIRI4ObjectPropIdentifier(getObjectPropMappings().get(ide1)),
-							Utilities.EQ, 
+							mapping_extractor.getObjectPropertyAnchorDirection(ide1), 
 							getConfidence4ObjectPropMapping(ide1, getObjectPropMappings().get(ide1))//1.0
 						);
 				}
@@ -2488,6 +2488,10 @@ public class LogMap2Core {
 	
 	public Map<Integer, Integer> getObjectPropMappings(){
 		return mapping_extractor.getObjectPropertyAnchors();	
+	}
+
+	public int getDirection4ObjectPropMapping(int ide1){
+		return mapping_extractor.getObjectPropertyAnchorDirection(ide1);
 	}
 	
 	public Map<Integer, Set<Integer>> getInstanceMappings(){

@@ -1,6 +1,7 @@
 package uk.ac.ox.krr.logmap2.repair.restrictions;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -34,13 +35,14 @@ public final class RestrictionReasoning {
      * @param fixedMappings correspondences already repaired, both directions, never masked
      * @param mappingsUnderRepair correspondences under repair, both directions of an equivalence
      * @param removedDirections the mapping clauses earlier plans removed in this repair
-     * @param propertyCorrespondences object-property correspondences, source to target
+     * @param propertyDirections the surviving directions of the object-property correspondences under repair
      */
     public List<HornInclusion> clausesFor(Map<Integer, Set<Integer>> fixedMappings,
             Map<Integer, Set<Integer>> mappingsUnderRepair, Set<HornClause> removedDirections,
-            Map<Integer, Integer> propertyCorrespondences) {
+            Collection<CorrespondenceDirection> propertyDirections) {
+                
         SupportedClosure classes = classClosure(fixedMappings, mappingsUnderRepair, removedDirections);
-        SupportedClosure properties = propertyClosure(propertyCorrespondences);
+        SupportedClosure properties = propertyClosure(propertyDirections);
         Disjointness disjointness = new Disjointness(index, classes, store.top());
         Functionality functionality = new Functionality(store, properties);
 
@@ -78,7 +80,7 @@ public final class RestrictionReasoning {
             int origin = originAndTargets.getKey();
             for (int target : originAndTargets.getValue()) {
                 if (!removedDirections.contains(mappingClauseOf(origin, target))) {
-                    classes.addCorrespondence(origin, target, new CorrespondenceDirection(origin, target));
+                    classes.addCorrespondence(origin, target, CorrespondenceDirection.ofClasses(origin, target));
                 }
             }
         }
@@ -86,8 +88,8 @@ public final class RestrictionReasoning {
         return classes;
     }
 
-    /** At this step property correspondences are facts: neither masked nor blamed. */
-    private SupportedClosure propertyClosure(Map<Integer, Integer> propertyCorrespondences) {
+    /** Sub-property facts of both ontologies, and each surviving property direction as a supported edge. */
+    private SupportedClosure propertyClosure(Collection<CorrespondenceDirection> propertyDirections) {
         SupportedClosure properties = new SupportedClosure();
 
         for (int subProperty : store.propertiesWithSuperProperties()) {
@@ -95,9 +97,8 @@ public final class RestrictionReasoning {
                 properties.addFact(subProperty, superProperty);
             }
         }
-        for (Map.Entry<Integer, Integer> sourceAndTarget : propertyCorrespondences.entrySet()) {
-            properties.addFact(sourceAndTarget.getKey(), sourceAndTarget.getValue());
-            properties.addFact(sourceAndTarget.getValue(), sourceAndTarget.getKey());
+        for (CorrespondenceDirection direction : propertyDirections) {
+            properties.addCorrespondence(direction.origin(), direction.target(), direction);
         }
 
         return properties;

@@ -636,7 +636,6 @@ public abstract class MappingManager {
 	}
 	
 	
-	
 	public Map<Integer, Integer> getDataPropertyAnchors(){
 		return dataPropertyMappings;
 	}
@@ -645,10 +644,50 @@ public abstract class MappingManager {
 		return objPropertyMappings;
 	}
 	
+
+	/**Direction of each object property anchor (source -> EQ, L2R or R2L); absent means EQ*/
+	protected Map<Integer, Integer> objPropertyAnchorDirection = new HashMap<Integer, Integer>();
+
 	
+	public int getObjectPropertyAnchorDirection(int source){
+		if (objPropertyAnchorDirection.containsKey(source))
+			return objPropertyAnchorDirection.get(source);
+		return Utilities.EQ;
+	}
+
+	
+	public void setObjectPropertyAnchorDirection(int source, int direction){
+		if (direction==Utilities.EQ)
+			objPropertyAnchorDirection.remove(source);
+		else
+			objPropertyAnchorDirection.put(source, direction);
+	}
+
+	
+	/**
+	 * The repair's action on a property correspondence: removing one direction weakens the anchor
+	 * to the other, and removing its last direction deletes it
+	 * @param source the ontology-1 property of the anchor
+	 * @param sourceToTarget true for the direction source -> target (L2R), false for target -> source
+	 */
+	public void removeObjectPropertyAnchorDirection(int source, boolean sourceToTarget){
+		int removed = sourceToTarget ? Utilities.L2R : Utilities.R2L;
+		int current = getObjectPropertyAnchorDirection(source);
+		if (current==Utilities.EQ){
+			setObjectPropertyAnchorDirection(source, sourceToTarget ? Utilities.R2L : Utilities.L2R);
+		}
+		else if (current==removed){
+			objPropertyMappings.remove(source);
+			objPropertyMappings2confidence.remove(source);
+			objPropertyAnchorDirection.remove(source);
+		}
+	}
+	
+
 	public Map<Integer, Set<Integer>> getInstanceMappings(){
 		return instanceMappings1N;
 	}
+
 	
 	/**
 	 * Only for statistics
