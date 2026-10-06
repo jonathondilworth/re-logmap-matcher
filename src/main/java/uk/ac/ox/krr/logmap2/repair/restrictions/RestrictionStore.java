@@ -20,6 +20,7 @@ import org.semanticweb.owlapi.apibinding.OWLManager;
 import org.semanticweb.owlapi.model.OWLOntology;
 
 import uk.ac.ox.krr.logmap2.indexing.IndexManager;
+import uk.ac.ox.krr.logmap2.repair.hornSAT.HornInclusion;
 
 /**
  * The restrictions of one ontology pair as propositions, with the Horn clauses that tie
@@ -77,8 +78,7 @@ public final class RestrictionStore {
         }
 
         OWLAxiomsAdapted normalised = new OWLAxiomsAdapted();
-        OWLNormalizationAdapted normaliser = new OWLNormalizationAdapted(
-                OWLManager.getOWLDataFactory(), normalised, 0);
+        OWLNormalizationAdapted normaliser = new OWLNormalizationAdapted(OWLManager.getOWLDataFactory(), normalised, 0);
         normaliser.processOntology(ontology);
 
         new NormalisedClauseReader(this, index, ontologyNumber).read(normalised);

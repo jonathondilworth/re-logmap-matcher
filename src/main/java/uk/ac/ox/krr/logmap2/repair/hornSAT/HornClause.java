@@ -42,6 +42,7 @@ public class HornClause{
 	//public static int ONTO1=1;	
 	//public static int ONTO2=2;
 	public static final int FIXEDMAP=3;
+	public static final int RESTRICTION=4; //a clause from the restriction store or a derived link
 	
 	//DIR IMPLICATION
 	public static final int L2R=0; //P->Q

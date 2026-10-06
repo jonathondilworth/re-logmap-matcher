@@ -17,6 +17,7 @@ import org.semanticweb.owlapi.model.OWLObjectPropertyExpression;
 import org.semanticweb.owlapi.model.OWLObjectSomeValuesFrom;
 
 import uk.ac.ox.krr.logmap2.indexing.IndexManager;
+import uk.ac.ox.krr.logmap2.repair.hornSAT.HornInclusion;
 import uk.ac.ox.krr.logmap2.utilities.Utilities;
 
 /**
@@ -85,7 +86,7 @@ final class NormalisedClauseReader {
         }
     }
 
-    
+
     private void readConceptInclusion(OWLClassExpression[] disjuncts) {
         List<Literal> literals = new ArrayList<>();
         boolean mentionsRestrictionOrFreshClass = false;

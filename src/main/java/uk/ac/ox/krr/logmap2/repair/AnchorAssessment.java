@@ -36,6 +36,7 @@ import uk.ac.ox.krr.logmap2.mappings.CandidateMappingManager;
 import uk.ac.ox.krr.logmap2.repair.hornSAT.DowlingGallierHornSAT;
 import uk.ac.ox.krr.logmap2.repair.hornSAT.HornClause;
 import uk.ac.ox.krr.logmap2.repair.hornSAT.Link;
+import uk.ac.ox.krr.logmap2.repair.restrictions.RestrictionReasoning;
 import uk.ac.ox.krr.logmap2.utilities.PrecomputeIndexCombination;
 import uk.ac.ox.krr.logmap2.io.*;
 
@@ -67,6 +68,8 @@ public class AnchorAssessment {
 	//private OntologyProcessing onto_process2;
 	
 	private MappingManager mapping_extractor;
+
+	private RestrictionReasoning restrictionReasoning;
 	
 	
 	//private WriteFile writer_plans;
