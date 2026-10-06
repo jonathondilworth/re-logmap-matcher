@@ -509,7 +509,20 @@ public class LogMap2_RepairFacility {
 	
 	
 	private void assessMappings(){
-		
+
+		// Assess Property mappings: using index. Before the class repair, so that the repair sees the
+		// admitted property mappings and nothing deletes one behind the repair's back afterwards. The
+		// assessment's disjointness test reads the interval labelling index, built here on the input
+		// class mappings first
+		if (mapping_manager.getDataPropertyAnchors().size() >0 || mapping_manager.getObjectPropertyAnchors().size() > 0) {
+			index.setIntervalLabellingIndex(mapping_manager.getLogMapMappings());
+			index.clearAuxStructuresforLabellingSchema();
+			init = Calendar.getInstance().getTimeInMillis();
+			mapping_manager.evaluateCompatibilityDataPropertyMappings();
+			mapping_manager.evaluateCompatibilityObjectPropertyMappings();
+			fin = Calendar.getInstance().getTimeInMillis();
+			LogOutput.print("\tTime assessing property mappings (s): " + (float)((double)fin-(double)init)/1000.0);		
+		}
 		
 		//CLASS MAPPINGS ASSESSESMENT
 		if (method_optimal)
@@ -519,17 +532,18 @@ public class LogMap2_RepairFacility {
 		
 		
 		
-		//Clean property mappings and individual mappings
+		//Clean ~~property mappings and~~ individual mappings
+		//Clean individual mappings
 		//--------------------------------
 		
-		//Assess Property mappings: using index
-		if (mapping_manager.getDataPropertyAnchors().size() >0 || mapping_manager.getObjectPropertyAnchors().size() > 0) {
-			init = Calendar.getInstance().getTimeInMillis();
-			mapping_manager.evaluateCompatibilityDataPropertyMappings();
-			mapping_manager.evaluateCompatibilityObjectPropertyMappings();
-			fin = Calendar.getInstance().getTimeInMillis();
-			LogOutput.print("\tTime assessing property mappings (s): " + (float)((double)fin-(double)init)/1000.0);		
-		}
+		// //Assess Property mappings: using index
+		// if (mapping_manager.getDataPropertyAnchors().size() >0 || mapping_manager.getObjectPropertyAnchors().size() > 0) {
+		// 	init = Calendar.getInstance().getTimeInMillis();
+		// 	mapping_manager.evaluateCompatibilityDataPropertyMappings();
+		// 	mapping_manager.evaluateCompatibilityObjectPropertyMappings();
+		// 	fin = Calendar.getInstance().getTimeInMillis();
+		// 	LogOutput.print("\tTime assessing property mappings (s): " + (float)((double)fin-(double)init)/1000.0);		
+		// }
 		
 		
 		

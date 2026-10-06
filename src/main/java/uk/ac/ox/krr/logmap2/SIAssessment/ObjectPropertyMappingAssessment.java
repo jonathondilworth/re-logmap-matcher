@@ -185,6 +185,9 @@ public class ObjectPropertyMappingAssessment extends PropertyMappingAssessment<I
 			//Too dangerous (always)
 			//Different but compatible
 			return PROBABLY_INCOMPATIBLE_RANGE_OR_DOMAIN;
+
+			// see: are properties compatible light
+			// return COMPATIBLE_RANGE_DOMAIN;
 			
 		}
 		
@@ -343,7 +346,12 @@ public class ObjectPropertyMappingAssessment extends PropertyMappingAssessment<I
 			//return COMPATIBLE_RANGE_DOMAIN;
 			//Too dangerous (always)
 			//Different but compatible
-			return PROBABLY_INCOMPATIBLE_RANGE_OR_DOMAIN;
+			// return PROBABLY_INCOMPATIBLE_RANGE_OR_DOMAIN;
+
+			//Different but not conflicting: admitted at the compatible bar (0.90) rather than
+			//rejected at 1.5, so that the repair, not this heuristic, decides the fate of a
+			//property correspondence whose domains and ranges merely differ
+			return COMPATIBLE_RANGE_DOMAIN;
 			
 		}
 		

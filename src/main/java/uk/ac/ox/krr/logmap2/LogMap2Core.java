@@ -1027,6 +1027,16 @@ public class LogMap2Core {
 		
 		LogOutput.printAlways("Time creating anchors (s): " + StatisticsTimeMappings.getRunningTime(init));
 		
+		// Property correspondences are discovered and admitted here, once, before the first repair
+		// round, so that the restriction rules see them during every round and no judgement after
+		// the repair can undo a repair decision. The admission's disjointness test reads the
+		// interval labelling index, which is therefore built on the raw class anchors first.
+		if (Parameters.perform_property_matching){
+			index.setIntervalLabellingIndex(mapping_extractor.getLogMapMappings());
+			index.clearAuxStructuresforLabellingSchema();
+			mapping_extractor.createObjectPropertyAnchors();
+			mapping_extractor.createDataPropertyAnchors();
+		}
 		
 		
 		
@@ -1235,7 +1245,9 @@ public class LogMap2Core {
 		interactiveProcessManager.endInteractiveProcess(mapping_extractor.isFilterWithHeuristicsSecondLevelMappings()); //adds mappings selected by user and logmap heuristics
 		/*else {
 			for (MappingObjectInteractivity mapping : mapping_extractor.getListOfMappingsToAskUser()){
-				
+				if (!mapping.isClassMapping()) // property entries, added at admission, are not class candidates
+					continue;
+			
 				mapping_extractor.addSubMapping2Mappings2Review(mapping.getIdentifierOnto1(), mapping.getIdentifierOnto2());
 				mapping_extractor.addSubMapping2Mappings2Review(mapping.getIdentifierOnto2(), mapping.getIdentifierOnto1());
 				
@@ -1281,6 +1293,8 @@ public class LogMap2Core {
 		//Adhoc method ask everything
 		//------------------------------------
 		for (MappingObjectInteractivity mapping : mapping_extractor.getListOfMappingsToAskUser()){
+			if (!mapping.isClassMapping()) //property entries, added at admission, are not class candidates
+				continue;
 					
 			if (OracleManager.isMappingValid(
 					index.getIRIStr4ConceptIndex(mapping.getIdentifierOnto1()),
@@ -1319,7 +1333,8 @@ public class LogMap2Core {
 	private void performAutomaticDecisions(){
 					
 		for (MappingObjectInteractivity mapping : mapping_extractor.getListOfMappingsToAskUser()){
-						
+			if (!mapping.isClassMapping()) // property entries, added at admission, are not class candidates
+				continue;
 			
 			//See createMappings2AskUser in mapping_extractor for more information about the use of this filter
 			if (!mapping_extractor.isFilterWithHeuristicsSecondLevelMappings() 
@@ -1604,11 +1619,12 @@ public class LogMap2Core {
 	
 	
 	/**
-	 * Discovery and assessment of DATA and OBJECT property mappings
+	 * Discovery and assessment of DATA and OBJECT property mappings <-- (see below for new behaviour)
+	 * Property mappings were discovered and assessed before the first repair round (createAndCleanAnchors)
 	 */
 	private void createAndAssessPropertyMappings(){
-		mapping_extractor.createObjectPropertyAnchors();
-		mapping_extractor.createDataPropertyAnchors();
+		// mapping_extractor.createObjectPropertyAnchors();
+		// mapping_extractor.createDataPropertyAnchors();
 		
 		
 		//Delete inverted files for properties
