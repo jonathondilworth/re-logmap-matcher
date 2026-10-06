@@ -9,16 +9,18 @@ import uk.ac.ox.krr.logmap2.repair.hornSAT.Support;
 /**
  * The clash rules between two restrictions: each conclusion is the
  * clause `r1 ∧ r2 → FALSE`, supported by the union of the supports of its conditions.
- * D1 at this step; the other D-rules join as methods.
+ * D1 and D2 so far; the other D-rules join as methods.
  */
 final class ClashRules {
 
     private final RestrictionStore store;
+    private final SupportedClosure classes;
     private final SupportedClosure properties;
     private final Disjointness disjointness;
 
-    ClashRules(RestrictionStore store, SupportedClosure properties, Disjointness disjointness) {
+    ClashRules(RestrictionStore store, SupportedClosure classes, SupportedClosure properties, Disjointness disjointness) {
         this.store = store;
+        this.classes = classes;
         this.properties = properties;
         this.disjointness = disjointness;
     }
@@ -27,18 +29,24 @@ final class ClashRules {
     List<HornInclusion> clashes() {
         List<HornInclusion> clashes = new ArrayList<>();
 
-        for (Restriction existential : store.restrictions()) {
-            for (Restriction universal : store.restrictions()) {
-                Support support = d1(existential, universal);
-                if (support != null) {
-                    clashes.add(HornInclusion.of(
-                            List.of(store.identifierOf(existential), store.identifierOf(universal)),
-                            HornInclusion.FALSE, support));
-                }
+        for (Restriction first : store.restrictions()) {
+            for (Restriction second : store.restrictions()) {
+                addClash(clashes, first, second, d1(first, second));
+                addClash(clashes, first, second, d2(first, second));
             }
         }
 
         return clashes;
+    }
+
+    private void addClash(List<HornInclusion> clashes, Restriction first, Restriction second, Support support) {
+        if (support != null) {
+            clashes.add(
+                HornInclusion.of(
+                    List.of(store.identifierOf(first), store.identifierOf(second)
+                ), HornInclusion.FALSE, support)
+            );
+        }
     }
 
     /**
@@ -60,4 +68,39 @@ final class ClashRules {
         }
         return propertySupport.with(fillerSupport);
     }
+
+
+    /**
+     * D2, min versus max: `≥n1 P1.F1` and `≤n2 P2.F2` clash when n1 > n2, P1 ⊑p P2 and
+     * F1 ⊑c F2. The n1 successors in F1 are n1 P2-successors in F2, more than the n2
+     * allowed. An unqualified max has filler TOP, so its filler condition holds trivially;
+     * an unqualified min against a qualified max fails it, which is right: the successors
+     * need not be in F2.
+     */
+    private Support d2(Restriction lowerBound, Restriction upperBound) {
+        if (!lowerBound.isExistential() || upperBound.kind() != RestrictionKind.AT_MOST) {
+            return null;
+        }
+        if (lowerBound.cardinality() <= upperBound.cardinality()) {
+            return null;
+        }
+        Support propertySupport = properties.supportOf(lowerBound.property(), upperBound.property());
+        if (propertySupport == null) {
+            return null;
+        }
+        Support fillerSupport = subClass(lowerBound.filler(), upperBound.filler());
+        if (fillerSupport == null) {
+            return null;
+        }
+        return propertySupport.with(fillerSupport);
+    }
+
+
+    private Support subClass(int subClass, int superClass) {
+        if (store.isTop(superClass)) {
+            return Support.EMPTY;
+        }
+        return classes.supportOf(subClass, superClass);
+    }
+
 }

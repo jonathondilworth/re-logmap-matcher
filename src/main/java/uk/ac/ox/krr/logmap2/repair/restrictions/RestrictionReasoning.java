@@ -13,8 +13,7 @@ import uk.ac.ox.krr.logmap2.repair.hornSAT.HornInclusion;
 /**
  * The restriction clauses of one Dowling–Gallier build: the store's own clauses plus the
  * links and clashes derived from the current correspondences. Rebuilt at every build, so a
- * correspondence removed by an earlier plan no longer supports anything. Design spec
- * §6.1 (the edge sets), §8.1 (the contract) and §8.5 (once per build).
+ * correspondence removed by an earlier plan no longer supports anything.
  */
 public final class RestrictionReasoning {
 
@@ -41,7 +40,7 @@ public final class RestrictionReasoning {
 
         List<HornInclusion> clauses = new ArrayList<>(store.inclusions());
         clauses.addAll(new SubsumptionLinkRules(store, classes, properties).links());
-        clauses.addAll(new ClashRules(store, properties, disjointness).clashes());
+        clauses.addAll(new ClashRules(store, classes, properties, disjointness).clashes());
         return clauses;
     }
 
