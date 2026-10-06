@@ -37,10 +37,11 @@ public final class RestrictionReasoning {
         SupportedClosure classes = classClosure(fixedMappings, mappingsUnderRepair, removedDirections);
         SupportedClosure properties = propertyClosure(propertyCorrespondences);
         Disjointness disjointness = new Disjointness(index, classes, store.top());
+        Functionality functionality = new Functionality(store, properties);
 
         List<HornInclusion> clauses = new ArrayList<>(store.inclusions());
         clauses.addAll(new SubsumptionLinkRules(store, classes, properties).links());
-        clauses.addAll(new ClashRules(store, classes, properties, disjointness).clashes());
+        clauses.addAll(new ClashRules(store, classes, properties, disjointness, functionality).clashes());
         return clauses;
     }
 

@@ -87,6 +87,9 @@ public class AnchorAssessment {
 	
 	private Map<Integer, Boolean> unsatClasses2repaired;
 
+	/**Classes unsatisfiable with no correspondence to blame: reported, never repaired*/
+	private Set<Integer> preexistingIncoherence = new HashSet<Integer>();
+
 		
 	//private Set<HornClause> plan = new HashSet<HornClause>();
 	//private Set<Integer> mappingsInrepair = new HashSet<Integer>();
@@ -150,6 +153,7 @@ public class AnchorAssessment {
 		this.index=index;
 		this.mapping_extractor=mapping_extractor;
 		
+		restrictionReasoning = new RestrictionReasoning(index);
 				
 		//We precompute indexes		 
 		precomputeIndexCombination.preComputeIdentifierCombination();
@@ -187,6 +191,8 @@ public class AnchorAssessment {
 		
 		unsatClasses2repaired = new HashMap<Integer, Boolean>();
 		
+		preexistingIncoherence = new HashSet<Integer>();
+
 		ignoreLinks = new HashMap<Integer, Set<Link>>();	
 		
 		
@@ -231,7 +237,14 @@ public class AnchorAssessment {
 				index.getDirectIndividualClassTypes(),
 				mapping_extractor.getFixedMappings(),
 				mappings2repair,
-				hornMappings2Remove);
+				hornMappings2Remove,
+				restrictionReasoning.clausesFor(
+					mapping_extractor.getFixedMappings(),
+					mappings2repair,
+					hornMappings2Remove,
+					mapping_extractor.getObjectPropertyAnchors()
+				)
+			);
 		
 		
 	}
@@ -610,6 +623,14 @@ public class AnchorAssessment {
 				//In some cases there are side effect between mappings and we need to collect more mappings
 				completeSetOfConflictiveMappings(cls, dgSat.getConflictiveMappings());  
 				
+				//No correspondence to blame: the input ontologies are incoherent on their own here
+				if (dgSat.getConflictiveMappings().isEmpty()){
+					if (preexistingIncoherence.add(cls)){
+						LogOutput.printAlways("Pre-existing incoherence: " + index.getIRIStr4ConceptIndex(cls)
+								+ " is unsatisfiable without any correspondence; not repaired");
+					}
+					continue;
+				}
 
 				//only if thre is not a class with same set of conflictive mappings
 				//We store unsat class with set of conflictive classes
@@ -892,6 +913,10 @@ public class AnchorAssessment {
 	}
 	
 	
+	public Set<Integer> getPreexistingIncoherence(){
+		return preexistingIncoherence;
+	}
+
 	
 	/**
 	 * This method evaluates the satisfiability of the integration together withh the given mappings

@@ -9,7 +9,7 @@ import uk.ac.ox.krr.logmap2.repair.hornSAT.Support;
 /**
  * The clash rules between two restrictions: each conclusion is the
  * clause `r1 ∧ r2 → FALSE`, supported by the union of the supports of its conditions.
- * D1 and D2 so far; the other D-rules join as methods.
+ * D1, D2 and D3 so far; the other D-rules join as methods.
  */
 final class ClashRules {
 
@@ -17,12 +17,14 @@ final class ClashRules {
     private final SupportedClosure classes;
     private final SupportedClosure properties;
     private final Disjointness disjointness;
+    private final Functionality functionality;
 
-    ClashRules(RestrictionStore store, SupportedClosure classes, SupportedClosure properties, Disjointness disjointness) {
+    ClashRules(RestrictionStore store, SupportedClosure classes, SupportedClosure properties, Disjointness disjointness, Functionality functionality) {
         this.store = store;
         this.classes = classes;
         this.properties = properties;
         this.disjointness = disjointness;
+        this.functionality = functionality;
     }
 
     /** Every clash between two restrictions of the store, in identifier order. */
@@ -33,6 +35,9 @@ final class ClashRules {
             for (Restriction second : store.restrictions()) {
                 addClash(clashes, first, second, d1(first, second));
                 addClash(clashes, first, second, d2(first, second));
+                if (store.identifierOf(first) < store.identifierOf(second)) {
+                    addClash(clashes, first, second, d3(first, second));
+                }
             }
         }
 
@@ -93,6 +98,28 @@ final class ClashRules {
             return null;
         }
         return propertySupport.with(fillerSupport);
+    }
+
+    
+    /**
+     * D3, functionality fan-in: `≥n1 P1.F1` and `≥n2 P2.F2` clash when both properties lie
+     * below one functional property and F1, F2 are disjoint. The two successors are
+     * successors through the functional property, hence one individual, which cannot be
+     * in both fillers. Evaluated once per unordered pair.
+     */
+    private Support d3(Restriction first, Restriction second) {
+        if (!first.isExistential() || !second.isExistential()) {
+            return null;
+        }
+        Support mergeSupport = functionality.mergeSupportOf(first.property(), second.property());
+        if (mergeSupport == null) {
+            return null;
+        }
+        Support fillerSupport = disjointness.supportOf(first.filler(), second.filler());
+        if (fillerSupport == null) {
+            return null;
+        }
+        return mergeSupport.with(fillerSupport);
     }
 
 

@@ -1173,7 +1173,20 @@ public class LogMap2_RepairFacility {
 	public Set<MappingObjectStr> getInputMappings(){
 		return input_mappings;
 	}
+
+	/**
+	 * Returns the IRIs of the classes found unsatisfiable without any correspondence to blame (not repaired)
+	 * @return
+	 */
+	public Set<String> getPreexistingIncoherence(){
+		Set<String> iris = new HashSet<String>();
+		for (int ide : mapping_assessment.getPreexistingIncoherence()){
+			iris.add(index.getIRIStr4ConceptIndex(ide));
+		}
+		return iris;
+	}
 	
+
 	/**
 	 * Returns the real size of the repair: number of removed clauses
 	 * @return

@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.TreeSet;
 
 /**
  * One Horn clause over propositions: the conjunction of the body implies the head, or
@@ -22,7 +23,9 @@ public record HornInclusion(List<Integer> body, int head, Support support) {
     public HornInclusion {
         List<Integer> sortedBody = new ArrayList<>(body);
         Collections.sort(sortedBody);
-        body = Collections.unmodifiableList(sortedBody);
+        // Sorted and without repeats: an atom listed twice would give Dowling-Gallier two
+        // identical arcs, which its arc set collapses, and the clause would never fire.
+        body = Collections.unmodifiableList(new ArrayList<>(new TreeSet<>(body)));
         if (body.isEmpty()) {
             throw new IllegalArgumentException("a clause needs at least one body proposition; head " + head);
         }
