@@ -58,11 +58,11 @@ public final class RestrictionHornClause extends HornClause {
         return false;
     }
 
-    /** The supports that are correspondences under repair; fixed ones are never blamed. */
+    /** The supports that are correspondences under repair, class or property; fixed ones are never blamed. */
     public Set<HornClause> blamedSupport() {
         Set<HornClause> blamed = new LinkedHashSet<>();
         for (HornClause supportClause : support) {
-            if (supportClause.getOrigin() == MAP) {
+            if (supportClause.getOrigin() == MAP || supportClause.getOrigin() == PROPERTY_MAP) {
                 blamed.add(supportClause);
             }
         }

@@ -260,7 +260,7 @@ public class AnchorAssessment {
 
 
 	/**
-	 * The directions of the object property anchors the repair has not removed, in source order
+	 * The directions of the object and data property anchors the repair has not removed, in source order
 	 */
 	private List<CorrespondenceDirection> survivingPropertyDirections(){
 		List<CorrespondenceDirection> directions = new ArrayList<CorrespondenceDirection>();
@@ -272,8 +272,16 @@ public class AnchorAssessment {
 			if (direction!=Utilities.L2R)
 				directions.add(CorrespondenceDirection.ofObjectProperties(target, source));
 		}
-		return directions;
-	}
+		for (int source : new TreeSet<Integer>(mapping_extractor.getDataPropertyAnchors().keySet())){
+			int target = mapping_extractor.getDataPropertyAnchors().get(source);
+			int direction = mapping_extractor.getDataPropertyAnchorDirection(source);
+			if (direction!=Utilities.R2L)
+				directions.add(CorrespondenceDirection.ofDataProperties(source, target));
+			if (direction!=Utilities.L2R)
+				directions.add(CorrespondenceDirection.ofDataProperties(target, source));
+		}
+ 		return directions;
+ 	}
 	
 	
 	
@@ -1196,9 +1204,14 @@ public class AnchorAssessment {
 					//A property direction is applied at once (the next build reads the anchor's new state)
 					//and masked for the rest of this build; the class bookkeeping below is not for it
 					if (clausemap instanceof PropertyDirectionClause direction){
-						boolean sourceToTarget = mapping_extractor.getObjectPropertyAnchors().containsKey(direction.source());
+						Map<Integer, Integer> anchors = direction.isDataProperty()
+								? mapping_extractor.getDataPropertyAnchors() : mapping_extractor.getObjectPropertyAnchors();
+						boolean sourceToTarget = anchors.containsKey(direction.source());
 						int source = sourceToTarget ? direction.source() : direction.target();
-						mapping_extractor.removeObjectPropertyAnchorDirection(source, sourceToTarget);
+						if (direction.isDataProperty())
+							mapping_extractor.removeDataPropertyAnchorDirection(source, sourceToTarget);
+						else
+							mapping_extractor.removeObjectPropertyAnchorDirection(source, sourceToTarget);
 						dgSat.addGeneralLink2Ignore(direction.getLeftHS1(), direction.getLabel(), direction.getRightHS());
 						continue;
 					}
@@ -1343,6 +1356,11 @@ public class AnchorAssessment {
 		//LogOutput.print("\tSCOPE:  " + ide1 + " -> " + ide2 + " " + mapping_extractor.getScope4Mapping(mapping_clause.getLeftHS1(), mapping_clause.getRightHS()));
 
 		if (mapping_clause instanceof PropertyDirectionClause direction){
+			if (direction.isDataProperty()){
+				if (mapping_extractor.getDataPropertyAnchors().containsKey(direction.source()))
+					return mapping_extractor.getConfidence4DataPropertyAnchor(direction.source(), direction.target());
+				return mapping_extractor.getConfidence4DataPropertyAnchor(direction.target(), direction.source());
+			}
 			if (mapping_extractor.getObjectPropertyAnchors().containsKey(direction.source()))
 				return mapping_extractor.getConfidence4ObjectPropertyAnchor(direction.source(), direction.target());
 			return mapping_extractor.getConfidence4ObjectPropertyAnchor(direction.target(), direction.source());

@@ -684,6 +684,42 @@ public abstract class MappingManager {
 	}
 	
 
+	/**Direction of each data property anchor (source -> EQ, L2R or R2L); absent means EQ*/
+	protected Map<Integer, Integer> dataPropertyAnchorDirection = new HashMap<Integer, Integer>();
+	
+
+	public int getDataPropertyAnchorDirection(int source){
+		if (dataPropertyAnchorDirection.containsKey(source))
+			return dataPropertyAnchorDirection.get(source);
+		return Utilities.EQ;
+	}
+	
+
+	public void setDataPropertyAnchorDirection(int source, int direction){
+		if (direction==Utilities.EQ)
+			dataPropertyAnchorDirection.remove(source);
+		else
+			dataPropertyAnchorDirection.put(source, direction);
+	}
+	
+
+	/**
+	 * The repair's action on a data property correspondence, as for object properties
+	 */
+	public void removeDataPropertyAnchorDirection(int source, boolean sourceToTarget){
+		int removed = sourceToTarget ? Utilities.L2R : Utilities.R2L;
+		int current = getDataPropertyAnchorDirection(source);
+		if (current==Utilities.EQ){
+			setDataPropertyAnchorDirection(source, sourceToTarget ? Utilities.R2L : Utilities.L2R);
+		}
+		else if (current==removed){
+			dataPropertyMappings.remove(source);
+			dataPropertyMappings2confidence.remove(source);
+			dataPropertyAnchorDirection.remove(source);
+		}
+	}
+	
+
 	public Map<Integer, Set<Integer>> getInstanceMappings(){
 		return instanceMappings1N;
 	}

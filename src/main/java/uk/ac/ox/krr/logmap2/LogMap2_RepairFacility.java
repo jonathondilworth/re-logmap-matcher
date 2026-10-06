@@ -996,6 +996,7 @@ public class LogMap2_RepairFacility {
 		//So far only equivalences are considered
 		//if (map.getMappingDirection()==Utilities.EQ){
 			mapping_manager.addDataPropertyAnchor(ide1, ide2);
+			mapping_manager.setDataPropertyAnchorDirection(ide1, map.getMappingDirection()); //a cell read as < or > stays directed
 			mapping_manager.addDataPropertyAnchorConfidence(ide1, map.getConfidence());
 		//}		
 		
@@ -1119,7 +1120,7 @@ public class LogMap2_RepairFacility {
 				outPutFilesManager.addDataPropMapping2Files(
 							index.getIRIStr4DataPropIndex(ide1),
 							index.getIRIStr4DataPropIndex(mapping_manager.getDataPropertyAnchors().get(ide1)),
-							Utilities.EQ,  
+							mapping_manager.getDataPropertyAnchorDirection(ide1),  
 							mapping_manager.getConfidence4DataPropertyAnchor(ide1, mapping_manager.getDataPropertyAnchors().get(ide1))//1.0
 						);
 			}
@@ -1408,10 +1409,10 @@ public class LogMap2_RepairFacility {
 				
 				clean_mappings.add(
 						new MappingObjectStr(
-								index.getIRIStr4ConceptIndex(ide1), 
+								index.getIRIStr4DataPropIndex(ide1), // a data property identifier, not a class one 
 								index.getIRIStr4DataPropIndex(mapping_manager.getDataPropertyAnchors().get(ide1)), 
 								mapping_manager.getConfidence4DataPropertyAnchor(ide1, mapping_manager.getDataPropertyAnchors().get(ide1)), 
-								Utilities.EQ,
+								mapping_manager.getDataPropertyAnchorDirection(ide1),
 								Utilities.DATAPROPERTIES));
 				
 				

@@ -24,10 +24,11 @@ import uk.ac.ox.krr.logmap2.repair.hornSAT.HornInclusion;
 
 /**
  * The restrictions of one ontology pair as propositions, with the Horn clauses that tie
- * them to named and fresh classes and the object-property inclusions, read from HermiT's
+ * them to named and fresh classes and the property inclusions, read from HermiT's
  * normalisation of each ontology. Propositions are ints: LogMap's own identifiers for
- * named classes, and identifiers above every LogMap identifier for TOP, fresh classes and
- * restrictions, so that they can enter Dowling–Gallier's propositional theory unchanged.
+ * named classes, and identifiers above every LogMap identifier for TOP, the data top,
+ * fresh classes, data ranges and restrictions, so that they can enter Dowling–Gallier's
+ * propositional theory unchanged.
  * The store is filled once per ontology while the ontology is alive, and read at every
  * repair.
  */
@@ -35,6 +36,7 @@ public final class RestrictionStore {
 
     private final IndexManager index;
     private final int top;
+    private final int dataTop;
     
     private int nextIdentifier;
 
@@ -44,8 +46,11 @@ public final class RestrictionStore {
     private final Map<String, Integer> identifierOfFreshClass = new HashMap<>();
     private final SortedMap<Integer, String> freshClassOfIdentifier = new TreeMap<>();
 
+    private final Map<DataRange, Integer> identifierOfDataRange = new HashMap<>();
+    private final SortedMap<Integer, DataRange> dataRangeOfIdentifier = new TreeMap<>();
+
     private final Set<HornInclusion> inclusions = new LinkedHashSet<>();
-    private final SortedMap<Integer, SortedSet<Integer>> superPropertiesOf = new TreeMap<>();
+    private final Map<PropertyKind, SortedMap<Integer, SortedSet<Integer>>> superPropertiesOf = new EnumMap<>(PropertyKind.class);
 
     private final List<DroppedClause> dropped = new ArrayList<>();
     
@@ -55,7 +60,11 @@ public final class RestrictionStore {
     private RestrictionStore(IndexManager index) {
         this.index = index;
         this.top = index.getLargestAllocatedIdentifier() + 1;
-        this.nextIdentifier = top + 1;
+        this.dataTop = top + 1;
+        this.nextIdentifier = dataTop + 1;
+        for (PropertyKind kind : PropertyKind.values()) {
+            superPropertiesOf.put(kind, new TreeMap<>());
+        }
     }
 
 
@@ -94,6 +103,24 @@ public final class RestrictionStore {
         return proposition == top;
     }
 
+    /** The top of the data ranges, `rdfs:Literal`: every data value belongs to it. */
+    public int dataTop() {
+        return dataTop;
+    }
+
+    public boolean isDataTop(int proposition) {
+        return proposition == dataTop;
+    }
+
+    public boolean isDataRange(int proposition) {
+        return dataRangeOfIdentifier.containsKey(proposition);
+    }
+
+    /** The top filler of restrictions over this kind of property. */
+    public boolean isTopFillerFor(PropertyKind kind, int filler) {
+        return kind == PropertyKind.OBJECT ? isTop(filler) : isDataTop(filler);
+    }
+
     public boolean isRestriction(int proposition) {
         return restrictionOfIdentifier.containsKey(proposition);
     }
@@ -127,6 +154,30 @@ public final class RestrictionStore {
         return identifier;
     }
 
+    /** The proposition of a data range, allocated on first sight; `rdfs:Literal` is the data top. */
+    int internDataRange(DataRange dataRange) {
+        if (dataRange.isLiteral()) {
+            return dataTop;
+        }
+        Integer known = identifierOfDataRange.get(dataRange);
+        if (known != null) {
+            return known;
+        }
+        int identifier = nextIdentifier++;
+        identifierOfDataRange.put(dataRange, identifier);
+        dataRangeOfIdentifier.put(identifier, dataRange);
+        return identifier;
+    }
+
+    public DataRange dataRange(int proposition) {
+        DataRange dataRange = dataRangeOfIdentifier.get(proposition);
+        if (dataRange == null) {
+            throw new IllegalArgumentException(proposition + " is not a data range proposition");
+        }
+        return dataRange;
+    }
+
+
     public Restriction restriction(int proposition) {
         Restriction restriction = restrictionOfIdentifier.get(proposition);
         if (restriction == null) {
@@ -138,6 +189,18 @@ public final class RestrictionStore {
     public Collection<Restriction> restrictions() {
         return Collections.unmodifiableCollection(restrictionOfIdentifier.values());
     }
+
+    /** The restrictions over properties of one kind, in identifier order. */
+    public List<Restriction> restrictions(PropertyKind kind) {
+        List<Restriction> ofKind = new ArrayList<>();
+        for (Restriction restriction : restrictionOfIdentifier.values()) {
+            if (restriction.propertyKind() == kind) {
+                ofKind.add(restriction);
+            }
+        }
+        return ofKind;
+    }
+
 
     public int identifierOf(Restriction restriction) {
         Integer identifier = identifierOfRestriction.get(restriction);
@@ -153,8 +216,8 @@ public final class RestrictionStore {
         inclusions.add(inclusion);
     }
 
-    void addSubProperty(int subProperty, int superProperty) {
-        superPropertiesOf.computeIfAbsent(subProperty, property -> new TreeSet<>()).add(superProperty);
+    void addSubProperty(PropertyKind kind, int subProperty, int superProperty) {
+        superPropertiesOf.get(kind).computeIfAbsent(subProperty, property -> new TreeSet<>()).add(superProperty);
     }
 
     void countCarriedByIndex() {
@@ -169,17 +232,17 @@ public final class RestrictionStore {
         return Collections.unmodifiableCollection(inclusions);
     }
 
-    /** The asserted super-properties of a property (named properties only). */
-    public SortedSet<Integer> superPropertiesOf(int property) {
-        SortedSet<Integer> superProperties = superPropertiesOf.get(property);
+    /** The asserted super-properties of a property of that kind (named properties only). */
+    public SortedSet<Integer> superPropertiesOf(PropertyKind kind, int property) {
+        SortedSet<Integer> superProperties = superPropertiesOf.get(kind).get(property);
         if (superProperties == null) {
             return Collections.emptySortedSet();
         }
         return Collections.unmodifiableSortedSet(superProperties);
     }
 
-    public SortedSet<Integer> propertiesWithSuperProperties() {
-        return Collections.unmodifiableSortedSet(new TreeSet<>(superPropertiesOf.keySet()));
+    public SortedSet<Integer> propertiesWithSuperProperties(PropertyKind kind) {
+        return Collections.unmodifiableSortedSet(new TreeSet<>(superPropertiesOf.get(kind).keySet()));
     }
 
     public List<DroppedClause> dropped() {
@@ -188,13 +251,19 @@ public final class RestrictionStore {
 
     // description
 
-    /** A proposition in words: `o1:A1`, `o2:def#0`, `TOP`, `some(o1:p1, o1:C1)`. */
+    /** A proposition in words: `o1:A1`, `o2:def#0`, `TOP`, `xsd:integer`, `some(o1:p1, o1:C1)`. */
     public String describe(int proposition) {
         if (proposition == HornInclusion.FALSE) {
             return "FALSE";
         }
         if (proposition == top) {
             return "TOP";
+        }
+        if (proposition == dataTop) {
+            return "rdfs:Literal";
+        }
+        if (isDataRange(proposition)) {
+            return dataRange(proposition).rendering();
         }
         if (isRestriction(proposition)) {
             return describe(restriction(proposition));
@@ -210,7 +279,7 @@ public final class RestrictionStore {
     }
 
     public String describe(Restriction restriction) {
-        String property = describeProperty(restriction.property());
+        String property = describeProperty(restriction.propertyKind(), restriction.property());
         String filler = describe(restriction.filler());
         if (restriction.kind() == RestrictionKind.SOME || restriction.kind() == RestrictionKind.ONLY) {
             return restriction.kind().displayName() + "(" + property + ", " + filler + ")";
@@ -218,7 +287,15 @@ public final class RestrictionStore {
         return restriction.kind().displayName() + "(" + restriction.cardinality() + ", " + property + ", " + filler + ")";
     }
 
-    public String describeProperty(int property) {
+    public String describeProperty(int objectProperty) {
+        return describeProperty(PropertyKind.OBJECT, objectProperty);
+    }
+
+    public String describeProperty(PropertyKind kind, int property) {
+        if (kind == PropertyKind.DATA) {
+            int ontologyNumber = index.getDataPropertyIndex(property).getOntologyId();
+            return "o" + (ontologyNumber + 1) + ":" + localName(index.getIRIStr4DataPropIndex(property));
+        }
         int ontologyNumber = index.getObjectPropertyIndex(property).getOntologyId();
         return "o" + (ontologyNumber + 1) + ":" + localName(index.getIRIStr4ObjPropIndex(property));
     }
@@ -236,8 +313,10 @@ public final class RestrictionStore {
     /** The report of what was read and what was not, one line per item. */
     public List<String> report() {
         List<String> lines = new ArrayList<>();
-        lines.add(restrictions().size() + " restrictions, " + inclusions.size() + " clauses, "
-                + superPropertiesOf.size() + " properties with super-properties, "
+        lines.add(restrictions().size() + " restrictions, " + dataRangeOfIdentifier.size() + " data ranges, "
+                + inclusions.size() + " clauses, "
+                + superPropertiesOf.get(PropertyKind.OBJECT).size() + " object properties and "
+                + superPropertiesOf.get(PropertyKind.DATA).size() + " data properties with super-properties, "
                 + clausesCarriedByIndex + " named-only clauses left to the index, "
                 + dropped.size() + " dropped");
 

@@ -9,30 +9,31 @@ import uk.ac.ox.krr.logmap2.repair.hornSAT.Support;
 /**
  * The clash rules between two restrictions: each conclusion is the
  * clause `r1 ∧ r2 → FALSE`, supported by the union of the supports of its conditions.
- * D1, D2 and D3 so far; the other D-rules join as methods.
+ * D1, D2 and D3 so far; the other D-rules join as methods. One instance per property
+ * kind: the rules are the same over data properties, with data ranges as fillers.
  */
 final class ClashRules {
 
     private final RestrictionStore store;
-    private final SupportedClosure classes;
+    private final PropertyKind kind;
     private final SupportedClosure properties;
-    private final Disjointness disjointness;
+    private final FillerRelations fillers;
     private final Functionality functionality;
 
-    ClashRules(RestrictionStore store, SupportedClosure classes, SupportedClosure properties, Disjointness disjointness, Functionality functionality) {
+    ClashRules(RestrictionStore store, PropertyKind kind, SupportedClosure properties, FillerRelations fillers, Functionality functionality) {
         this.store = store;
-        this.classes = classes;
+        this.kind = kind;
         this.properties = properties;
-        this.disjointness = disjointness;
+        this.fillers = fillers;
         this.functionality = functionality;
     }
 
-    /** Every clash between two restrictions of the store, in identifier order. */
+    /** Every clash between two restrictions of this kind, in identifier order. */
     List<HornInclusion> clashes() {
         List<HornInclusion> clashes = new ArrayList<>();
 
-        for (Restriction first : store.restrictions()) {
-            for (Restriction second : store.restrictions()) {
+        for (Restriction first : store.restrictions(kind)) {
+            for (Restriction second : store.restrictions(kind)) {
                 addClash(clashes, first, second, d1(first, second));
                 addClash(clashes, first, second, d2(first, second));
                 if (store.identifierOf(first) < store.identifierOf(second)) {
@@ -67,7 +68,7 @@ final class ClashRules {
         if (propertySupport == null) {
             return null;
         }
-        Support fillerSupport = disjointness.supportOf(existential.filler(), universal.filler());
+        Support fillerSupport = fillers.disjointness(existential.filler(), universal.filler());
         if (fillerSupport == null) {
             return null;
         }
@@ -100,7 +101,7 @@ final class ClashRules {
         return propertySupport.with(fillerSupport);
     }
 
-    
+
     /**
      * D3, functionality fan-in: `≥n1 P1.F1` and `≥n2 P2.F2` clash when both properties lie
      * below one functional property and F1, F2 are disjoint. The two successors are
@@ -115,7 +116,7 @@ final class ClashRules {
         if (mergeSupport == null) {
             return null;
         }
-        Support fillerSupport = disjointness.supportOf(first.filler(), second.filler());
+        Support fillerSupport = fillers.disjointness(first.filler(), second.filler());
         if (fillerSupport == null) {
             return null;
         }
@@ -123,11 +124,8 @@ final class ClashRules {
     }
 
 
-    private Support subClass(int subClass, int superClass) {
-        if (store.isTop(superClass)) {
-            return Support.EMPTY;
-        }
-        return classes.supportOf(subClass, superClass);
+    private Support subClass(int subFiller, int superFiller) {
+        return fillers.subsumption(subFiller, superFiller);
     }
 
 }

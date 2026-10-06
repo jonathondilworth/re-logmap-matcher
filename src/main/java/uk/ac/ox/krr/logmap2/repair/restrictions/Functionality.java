@@ -9,19 +9,19 @@ import uk.ac.ox.krr.logmap2.repair.hornSAT.Support;
 
 /**
  * Which properties are functional, read from the store's clauses attached to TOP
- * (`TOP → atMost(1, F, TOP)` is `Functional(F)`), and under which support a property lies
- * below a functional one through the property closure. Functionality reaches down the
- * property hierarchy only.
+ * (`TOP → atMost(1, F, TOP)` is `Functional(F)`; `rdfs:Literal` is the top for a data
+ * property), and under which support a property lies below a functional one through the
+ * property closure of its kind. Functionality reaches down the property hierarchy only.
  */
 final class Functionality {
 
     private final SortedSet<Integer> functionalProperties = new TreeSet<>();
     private final SupportedClosure properties;
 
-    Functionality(RestrictionStore store, SupportedClosure properties) {
+    Functionality(RestrictionStore store, PropertyKind kind, SupportedClosure properties) {
         this.properties = properties;
         for (HornInclusion inclusion : store.inclusions()) {
-            if (isFunctionalityOfTop(store, inclusion)) {
+            if (isFunctionalityOfTop(store, kind, inclusion)) {
                 functionalProperties.add(store.restriction(inclusion.head()).property());
             }
         }
@@ -49,11 +49,11 @@ final class Functionality {
         return best;
     }
 
-    private static boolean isFunctionalityOfTop(RestrictionStore store, HornInclusion inclusion) {
+    private static boolean isFunctionalityOfTop(RestrictionStore store, PropertyKind kind, HornInclusion inclusion) {
         if (!inclusion.body().equals(List.of(store.top())) || !store.isRestriction(inclusion.head())) {
             return false;
         }
         Restriction head = store.restriction(inclusion.head());
-        return head.kind() == RestrictionKind.AT_MOST && head.cardinality() == 1 && store.isTop(head.filler());
+        return head.propertyKind() == kind && head.kind() == RestrictionKind.AT_MOST && head.cardinality() == 1 && store.isTopFillerFor(kind, head.filler());
     }
 }

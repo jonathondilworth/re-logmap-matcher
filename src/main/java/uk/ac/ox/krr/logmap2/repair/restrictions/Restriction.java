@@ -1,11 +1,12 @@
 package uk.ac.ox.krr.logmap2.repair.restrictions;
 
 /**
- * One object-property restriction as it occurs in a normalised ontology, in LogMap's int
- * vocabulary: the property is an object-property identifier and the filler is a class
- * proposition (a named class identifier, a fresh dummy class or the store's TOP). Two
- * occurrences with the same components are the same restriction, which is what lets the
- * store give each restriction one proposition.
+ * One restriction as it occurs in a normalised ontology, in LogMap's int vocabulary: the
+ * property is an object- or data-property identifier (the kind says which, since the two
+ * are numbered separately) and the filler is a proposition of the store (a named class
+ * identifier, a fresh class or TOP for an object property; a data range or the data top
+ * for a data property). Two occurrences with the same components are the same
+ * restriction, which is what lets the store give each restriction one proposition.
  */
 
 
@@ -17,7 +18,7 @@ package uk.ac.ox.krr.logmap2.repair.restrictions;
  * @param cardinality
  * @param filler
  */
-public record Restriction(RestrictionKind kind, int property, int cardinality, int filler) {
+public record Restriction(RestrictionKind kind, PropertyKind propertyKind, int property, int cardinality, int filler) {
 
     public Restriction {
         if (kind == RestrictionKind.SOME && cardinality != 1) {
@@ -35,23 +36,39 @@ public record Restriction(RestrictionKind kind, int property, int cardinality, i
     }
 
     public static Restriction some(int property, int filler) {
-        return new Restriction(RestrictionKind.SOME, property, 1, filler);
+        return some(PropertyKind.OBJECT, property, filler);
+    }
+
+    public static Restriction some(PropertyKind propertyKind, int property, int filler) {
+        return new Restriction(RestrictionKind.SOME, propertyKind, property, 1, filler);
     }
 
     public static Restriction only(int property, int filler) {
-        return new Restriction(RestrictionKind.ONLY, property, 0, filler);
+        return only(PropertyKind.OBJECT, property, filler);
+    }
+
+    public static Restriction only(PropertyKind propertyKind, int property, int filler) {
+        return new Restriction(RestrictionKind.ONLY, propertyKind, property, 0, filler);
     }
 
     /** `≥n R.C`; `n = 1` is {@link #some}. */
     public static Restriction atLeast(int cardinality, int property, int filler) {
+        return atLeast(PropertyKind.OBJECT, cardinality, property, filler);
+    }
+
+    public static Restriction atLeast(PropertyKind propertyKind, int cardinality, int property, int filler) {
         if (cardinality == 1) {
-            return some(property, filler); // some
+            return some(propertyKind, property, filler);
         }
-        return new Restriction(RestrictionKind.AT_LEAST, property, cardinality, filler);
+        return new Restriction(RestrictionKind.AT_LEAST, propertyKind, property, cardinality, filler);
     }
 
     public static Restriction atMost(int cardinality, int property, int filler) {
-        return new Restriction(RestrictionKind.AT_MOST, property, cardinality, filler);
+        return atMost(PropertyKind.OBJECT, cardinality, property, filler);
+    }
+
+    public static Restriction atMost(PropertyKind propertyKind, int cardinality, int property, int filler) {
+        return new Restriction(RestrictionKind.AT_MOST, propertyKind, property, cardinality, filler);
     }
 
     public boolean isExistential() {

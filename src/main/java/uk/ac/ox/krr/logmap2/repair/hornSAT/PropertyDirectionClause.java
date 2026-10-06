@@ -1,22 +1,32 @@
 package uk.ac.ox.krr.logmap2.repair.hornSAT;
 
 /**
- * One surviving direction of an object-property correspondence inside Dowling–Gallier:
- * `source ⊑ target` as a clause with no arc. It exists so that a plan can mask it and a
+ * One surviving direction of an object- or data-property correspondence inside
+ * Dowling–Gallier: `source ⊑ target` as a clause with no arc. It exists so that a plan can mask it and a
  * supported restriction clause can name it in its support and blame it; the plan search
  * then treats a property direction like a class direction, and applying it weakens or
- * deletes the correspondence. Equality is by the two properties and never against a
- * plain clause, because property and class identifiers overlap. Design spec §8.8 item 2.
+ * deletes the correspondence. Equality is by the kind and the two properties and never
+ * against a plain clause, because the identifier spaces overlap.
  */
 public final class PropertyDirectionClause extends HornClause {
 
+    private final CorrespondenceDirection.Kind kind;
     private final int source;
     private final int target;
 
-    public PropertyDirectionClause(int source, int target, int label) {
+    public PropertyDirectionClause(CorrespondenceDirection.Kind kind, int source, int target, int label) {
         super(source, target, label, PROPERTY_MAP, L2R);
+        this.kind = kind;
         this.source = source;
         this.target = target;
+    }
+
+    public CorrespondenceDirection.Kind kind() {
+        return kind;
+    }
+
+    public boolean isDataProperty() {
+        return kind == CorrespondenceDirection.Kind.DATA_PROPERTY;
     }
 
     public int source() {
@@ -32,7 +42,7 @@ public final class PropertyDirectionClause extends HornClause {
         if (!(other instanceof PropertyDirectionClause that)) {
             return false;
         }
-        return source == that.source && target == that.target;
+        return kind == that.kind && source == that.source && target == that.target;
     }
 
     @Override
@@ -42,11 +52,11 @@ public final class PropertyDirectionClause extends HornClause {
 
     @Override
     public int hashCode() {
-        return 31 * (31 * 7 + source) + target;
+        return 31 * (31 * (31 * 7 + kind.ordinal()) + source) + target;
     }
 
     @Override
     public String toString() {
-        return "property " + source + " -> " + target + " (PROPERTY_MAP) (" + getLabel() + ")";
+        return (isDataProperty() ? "data property " : "property ") + source + " -> " + target + " (PROPERTY_MAP) (" + getLabel() + ")";
     }
 }

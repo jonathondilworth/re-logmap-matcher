@@ -733,7 +733,7 @@ public class DowlingGallierHornSAT {
 	private void addPropertyDirectionClauses(Collection<CorrespondenceDirection> propertyDirections){
 		
 		for (CorrespondenceDirection direction : propertyDirections){
-			PropertyDirectionClause clause = new PropertyDirectionClause(direction.origin(), direction.target(), clause_num);
+			PropertyDirectionClause clause = new PropertyDirectionClause(direction.kind(), direction.origin(), direction.target(), clause_num);
 			clauses.put(clause_num, clause);
 			mappingClauseOfDirection.put(direction, clause);
 			N.add(1);

@@ -16,21 +16,23 @@ import uk.ac.ox.krr.logmap2.repair.hornSAT.Support;
 final class SubsumptionLinkRules {
 
     private final RestrictionStore store;
-    private final SupportedClosure classes;
+    private final PropertyKind kind;
     private final SupportedClosure properties;
+    private final FillerRelations fillers;
 
-    SubsumptionLinkRules(RestrictionStore store, SupportedClosure classes, SupportedClosure properties) {
+    SubsumptionLinkRules(RestrictionStore store, PropertyKind kind, SupportedClosure properties, FillerRelations fillers) {
         this.store = store;
-        this.classes = classes;
+        this.kind = kind;
         this.properties = properties;
+        this.fillers = fillers;
     }
 
-    /** Every link between two distinct restrictions of the store, in identifier order. */
+    /** Every link between two distinct restrictions of this kind, in identifier order. */
     List<HornInclusion> links() {
         List<HornInclusion> links = new ArrayList<>();
 
-        for (Restriction from : store.restrictions()) {
-            for (Restriction to : store.restrictions()) {
+        for (Restriction from : store.restrictions(kind)) {
+            for (Restriction to : store.restrictions(kind)) {
                 if (from.equals(to)) {
                     continue;
                 }
@@ -85,10 +87,7 @@ final class SubsumptionLinkRules {
         return properties.supportOf(subProperty, superProperty);
     }
 
-    private Support subClass(int subClass, int superClass) {
-        if (store.isTop(superClass)) {
-            return Support.EMPTY;
-        }
-        return classes.supportOf(subClass, superClass);
+    private Support subClass(int subFiller, int superFiller) {
+        return fillers.subsumption(subFiller, superFiller);
     }
 }

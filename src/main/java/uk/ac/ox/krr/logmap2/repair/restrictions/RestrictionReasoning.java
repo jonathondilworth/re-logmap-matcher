@@ -35,20 +35,35 @@ public final class RestrictionReasoning {
      * @param fixedMappings correspondences already repaired, both directions, never masked
      * @param mappingsUnderRepair correspondences under repair, both directions of an equivalence
      * @param removedDirections the mapping clauses earlier plans removed in this repair
-     * @param propertyDirections the surviving directions of the object-property correspondences under repair
+     * @param propertyDirections the surviving directions of the object- and data-property correspondences under repair
      */
     public List<HornInclusion> clausesFor(Map<Integer, Set<Integer>> fixedMappings,
             Map<Integer, Set<Integer>> mappingsUnderRepair, Set<HornClause> removedDirections,
             Collection<CorrespondenceDirection> propertyDirections) {
                 
         SupportedClosure classes = classClosure(fixedMappings, mappingsUnderRepair, removedDirections);
-        SupportedClosure properties = propertyClosure(propertyDirections);
-        Disjointness disjointness = new Disjointness(index, classes, store.top());
-        Functionality functionality = new Functionality(store, properties);
+        SupportedClosure objectProperties = propertyClosure(PropertyKind.OBJECT, CorrespondenceDirection.Kind.OBJECT_PROPERTY, propertyDirections);
+        SupportedClosure dataProperties = propertyClosure(PropertyKind.DATA, CorrespondenceDirection.Kind.DATA_PROPERTY, propertyDirections);
+        FillerRelations classFillers = new ClassFillers(store, classes, new Disjointness(index, classes, store.top()));
+        FillerRelations datatypeFillers = new DatatypeFillers(store);
 
         List<HornInclusion> clauses = new ArrayList<>(store.inclusions());
-        clauses.addAll(new SubsumptionLinkRules(store, classes, properties).links());
-        clauses.addAll(new ClashRules(store, classes, properties, disjointness, functionality).clashes());
+        clauses.addAll(rulesOver(PropertyKind.OBJECT, objectProperties, classFillers));
+        clauses.addAll(rulesOver(PropertyKind.DATA, dataProperties, datatypeFillers));
+        return clauses;
+    }
+
+    /** The datatype relations over a store's data ranges; for tests, which cannot see the package-private types. */
+    public static FillerRelations datatypeFillersOf(RestrictionStore store) {
+        return new DatatypeFillers(store);
+    }
+
+    /** The links and clashes among the restrictions of one property kind. */
+    private List<HornInclusion> rulesOver(PropertyKind kind, SupportedClosure properties, FillerRelations fillers) {
+        Functionality functionality = new Functionality(store, kind, properties);
+        List<HornInclusion> clauses = new ArrayList<>();
+        clauses.addAll(new SubsumptionLinkRules(store, kind, properties, fillers).links());
+        clauses.addAll(new ClashRules(store, kind, properties, fillers, functionality).clashes());
         return clauses;
     }
 
@@ -88,19 +103,26 @@ public final class RestrictionReasoning {
         return classes;
     }
 
-    /** Sub-property facts of both ontologies, and each surviving property direction as a supported edge. */
-    private SupportedClosure propertyClosure(Collection<CorrespondenceDirection> propertyDirections) {
-        SupportedClosure properties = new SupportedClosure();
+    /** The sub-property facts of one kind, and each surviving direction of that kind as a supported edge. */
+    private SupportedClosure propertyClosure(PropertyKind kind, CorrespondenceDirection.Kind directionKind,
+            Collection<CorrespondenceDirection> propertyDirections) {
+        SupportedClosure properties = subPropertyFacts(kind);
+        for (CorrespondenceDirection direction : propertyDirections) {
+            if (direction.kind() == directionKind) {
+                properties.addCorrespondence(direction.origin(), direction.target(), direction);
+            }
+        }
+        return properties;
+    }
 
-        for (int subProperty : store.propertiesWithSuperProperties()) {
-            for (int superProperty : store.superPropertiesOf(subProperty)) {
+
+    private SupportedClosure subPropertyFacts(PropertyKind kind) {
+        SupportedClosure properties = new SupportedClosure();
+        for (int subProperty : store.propertiesWithSuperProperties(kind)) {
+            for (int superProperty : store.superPropertiesOf(kind, subProperty)) {
                 properties.addFact(subProperty, superProperty);
             }
         }
-        for (CorrespondenceDirection direction : propertyDirections) {
-            properties.addCorrespondence(direction.origin(), direction.target(), direction);
-        }
-
         return properties;
     }
 

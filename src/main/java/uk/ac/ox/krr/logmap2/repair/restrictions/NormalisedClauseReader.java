@@ -6,6 +6,16 @@ import java.util.List;
 import org.semanticweb.HermiT.structural.OWLAxiomsAdapted;
 import org.semanticweb.owlapi.model.OWLClass;
 import org.semanticweb.owlapi.model.OWLClassExpression;
+import org.semanticweb.owlapi.model.OWLDataAllValuesFrom;
+import org.semanticweb.owlapi.model.OWLDataComplementOf;
+import org.semanticweb.owlapi.model.OWLDataMaxCardinality;
+import org.semanticweb.owlapi.model.OWLDataMinCardinality;
+import org.semanticweb.owlapi.model.OWLDataOneOf;
+import org.semanticweb.owlapi.model.OWLDataPropertyExpression;
+import org.semanticweb.owlapi.model.OWLDataRange;
+import org.semanticweb.owlapi.model.OWLDataSomeValuesFrom;
+import org.semanticweb.owlapi.model.OWLDatatype;
+import org.semanticweb.owlapi.model.OWLDatatypeRestriction;
 import org.semanticweb.owlapi.model.OWLObjectAllValuesFrom;
 import org.semanticweb.owlapi.model.OWLObjectCardinalityRestriction;
 import org.semanticweb.owlapi.model.OWLObjectComplementOf;
@@ -26,7 +36,8 @@ import uk.ac.ox.krr.logmap2.utilities.Utilities;
  * that is the dual of an atom (`∀R.¬C`, `∀R.⊥`, `∃R.¬C`, `≤n`, `≥n`) is read as that atom
  * in the body, and what remains is the head. The clause is kept when exactly one head
  * remains; a clause over named classes only is left to LogMap's index; everything else is
- * dropped with a reason.
+ * dropped with a reason. Data restrictions are read the same way, with data ranges as
+ * fillers and `rdfs:Literal` as their top.
  */
 final class NormalisedClauseReader {
 
@@ -49,14 +60,16 @@ final class NormalisedClauseReader {
         for (OWLObjectPropertyExpression[] inclusion : normalised.getSimpleObjectPropertyInclusions()) {
             readPropertyInclusion(inclusion[0], inclusion[1]);
         }
+        for (OWLDataPropertyExpression[] inclusion : normalised.getDataPropertyInclusions()) {
+            readDataPropertyInclusion(inclusion[0], inclusion[1]);
+        }
         dropAll(normalised.getComplexObjectPropertyInclusionsAsChains(), DroppedClause.Reason.PROPERTY_CHAIN);
         dropAll(normalised.getDisjointObjectProperties(), DroppedClause.Reason.DISJOINT_PROPERTIES);
         dropAll(normalised.getReflexiveObjectProperties(), DroppedClause.Reason.PROPERTY_CHARACTERISTIC);
         dropAll(normalised.getIrreflexiveObjectProperties(), DroppedClause.Reason.PROPERTY_CHARACTERISTIC);
         dropAll(normalised.getAsymmetricObjectProperties(), DroppedClause.Reason.PROPERTY_CHARACTERISTIC);
-        dropAll(normalised.getDataPropertyInclusions(), DroppedClause.Reason.DATA_PROPERTY);
-        dropAll(normalised.getDisjointDataProperties(), DroppedClause.Reason.DATA_PROPERTY);
-        dropAll(normalised.getDataRangeInclusions(), DroppedClause.Reason.DATA_PROPERTY);
+        dropAll(normalised.getDisjointDataProperties(), DroppedClause.Reason.DATA_AXIOM);
+        dropAll(normalised.getDataRangeInclusions(), DroppedClause.Reason.DATA_AXIOM);
         dropAll(normalised.getFacts(), DroppedClause.Reason.ASSERTION);
         dropAll(normalised.getHasKeys(), DroppedClause.Reason.KEY);
     }
@@ -180,6 +193,18 @@ final class NormalisedClauseReader {
         if (disjunct instanceof OWLObjectMaxCardinality atMost) {
             return readAtMost(atMost.getProperty(), atMost.getCardinality(), atMost.getFiller());
         }
+        if (disjunct instanceof OWLDataSomeValuesFrom some) {
+            return readDataExistential(some.getProperty(), 1, some.getFiller());
+        }
+        if (disjunct instanceof OWLDataMinCardinality atLeast) {
+            return readDataExistential(atLeast.getProperty(), atLeast.getCardinality(), atLeast.getFiller());
+        }
+        if (disjunct instanceof OWLDataAllValuesFrom only) {
+            return readDataUniversal(only.getProperty(), only.getFiller());
+        }
+        if (disjunct instanceof OWLDataMaxCardinality atMost) {
+            return readDataAtMost(atMost.getProperty(), atMost.getCardinality(), atMost.getFiller());
+        }
         throw new Unreadable(reasonFor(disjunct));
     }
 
@@ -240,11 +265,57 @@ final class NormalisedClauseReader {
         return Literal.headWithDual(proposition, Restriction.atLeast(cardinality + 1, propertyIdentifier, fillerIdentifier));
     }
 
+
+    // the same readings over data properties, with data ranges as fillers
+
+    private Literal readDataExistential(OWLDataPropertyExpression property, int cardinality, OWLDataRange filler) {
+        int propertyIdentifier = dataPropertyIdentifier(property);
+        if (filler instanceof OWLDataComplementOf complement) {
+            if (cardinality != 1) {
+                throw new Unreadable(DroppedClause.Reason.COMPLEMENT_FILLER);
+            }
+            return Literal.body(store.intern(Restriction.only(PropertyKind.DATA, propertyIdentifier, dataRangeProposition(complement.getDataRange()))));
+        }
+        int fillerIdentifier = dataRangeProposition(filler);
+        int proposition = store.intern(Restriction.atLeast(PropertyKind.DATA, cardinality, propertyIdentifier, fillerIdentifier));
+        if (cardinality >= 2) {
+            return Literal.headWithDual(proposition, Restriction.atMost(PropertyKind.DATA, cardinality - 1, propertyIdentifier, fillerIdentifier));
+        }
+        return Literal.head(proposition);
+    }
+
+
+    private Literal readDataUniversal(OWLDataPropertyExpression property, OWLDataRange filler) {
+        int propertyIdentifier = dataPropertyIdentifier(property);
+        if (filler instanceof OWLDataComplementOf complement) {
+            return Literal.body(store.intern(Restriction.some(PropertyKind.DATA, propertyIdentifier, dataRangeProposition(complement.getDataRange()))));
+        }
+        return Literal.head(store.intern(Restriction.only(PropertyKind.DATA, propertyIdentifier, dataRangeProposition(filler))));
+    }
+
+
+    private Literal readDataAtMost(OWLDataPropertyExpression property, int cardinality, OWLDataRange filler) {
+        int propertyIdentifier = dataPropertyIdentifier(property);
+        if (filler instanceof OWLDataComplementOf) {
+            throw new Unreadable(DroppedClause.Reason.COMPLEMENT_FILLER);
+        }
+        int fillerIdentifier = dataRangeProposition(filler);
+        if (cardinality == 0) {
+            return Literal.body(store.intern(Restriction.some(PropertyKind.DATA, propertyIdentifier, fillerIdentifier)));
+        }
+        int proposition = store.intern(Restriction.atMost(PropertyKind.DATA, cardinality, propertyIdentifier, fillerIdentifier));
+        return Literal.headWithDual(proposition, Restriction.atLeast(PropertyKind.DATA, cardinality + 1, propertyIdentifier, fillerIdentifier));
+    }
+
+
     // literal shapes that end a clause early
 
     private static boolean isTautology(OWLClassExpression disjunct) {
         if (disjunct.isOWLThing()) {
             return true;
+        }
+        if (disjunct instanceof OWLDataAllValuesFrom only) {
+            return only.getFiller().isTopDatatype();
         }
         if (disjunct instanceof OWLObjectAllValuesFrom only) {
             return only.getFiller().isOWLThing();
@@ -261,6 +332,9 @@ final class NormalisedClauseReader {
     private static boolean isContradiction(OWLClassExpression disjunct) {
         if (disjunct.isOWLNothing()) {
             return true;
+        }
+        if (disjunct instanceof OWLDataSomeValuesFrom some) {
+            return isComplementOfLiteral(some.getFiller());
         }
         if (disjunct instanceof OWLObjectSomeValuesFrom some) {
             return some.getFiller().isOWLNothing();
@@ -294,6 +368,36 @@ final class NormalisedClauseReader {
         throw new Unreadable(reasonFor(filler));
     }
 
+
+    private static boolean isComplementOfLiteral(OWLDataRange range) {
+        return range instanceof OWLDataComplementOf complement && complement.getDataRange().isTopDatatype();
+    }
+
+
+    private int dataPropertyIdentifier(OWLDataPropertyExpression property) {
+        String iri = property.asOWLDataProperty().getIRI().toString();
+        if (index.getTypeOfEntity4IRI(iri) != Utilities.DATAPROPERTIES) {
+            throw new Unreadable(DroppedClause.Reason.UNKNOWN_ENTITY);
+        }
+        return index.getDataPropIdentifier4IRI(iri);
+    }
+
+
+    /** A datatype or a facet restriction; enumerations wait for step 11, anything else is dropped. */
+    private int dataRangeProposition(OWLDataRange range) {
+        if (range instanceof OWLDatatype datatype) {
+            return store.internDataRange(DataRange.of(datatype));
+        }
+        if (range instanceof OWLDatatypeRestriction restriction) {
+            return store.internDataRange(DataRange.of(restriction));
+        }
+        if (range instanceof OWLDataOneOf) {
+            throw new Unreadable(DroppedClause.Reason.HAS_VALUE);
+        }
+        throw new Unreadable(DroppedClause.Reason.UNSUPPORTED_DATA_RANGE);
+    }
+
+
     private int propertyIdentifier(OWLObjectPropertyExpression property) {
         if (property.isAnonymous()) {
             throw new Unreadable(DroppedClause.Reason.INVERSE_PROPERTY);
@@ -304,6 +408,7 @@ final class NormalisedClauseReader {
         }
         return index.getObjectPropIdentifier4IRI(iri);
     }
+
 
     private static DroppedClause.Reason reasonFor(OWLClassExpression expression) {
         if (expression instanceof OWLObjectHasSelf) {
@@ -319,14 +424,23 @@ final class NormalisedClauseReader {
                 || expression instanceof OWLObjectComplementOf) {
             return DroppedClause.Reason.NOT_HORN;
         }
-        return DroppedClause.Reason.DATA_PROPERTY;
+        return DroppedClause.Reason.OTHER;
     }
+
 
     // property inclusions
 
     private void readPropertyInclusion(OWLObjectPropertyExpression subProperty, OWLObjectPropertyExpression superProperty) {
         try {
-            store.addSubProperty(propertyIdentifier(subProperty), propertyIdentifier(superProperty));
+            store.addSubProperty(PropertyKind.OBJECT, propertyIdentifier(subProperty), propertyIdentifier(superProperty));
+        } catch (Unreadable unreadable) {
+            store.drop(unreadable.reason, subProperty + " -> " + superProperty);
+        }
+    }
+
+    private void readDataPropertyInclusion(OWLDataPropertyExpression subProperty, OWLDataPropertyExpression superProperty) {
+        try {
+            store.addSubProperty(PropertyKind.DATA, dataPropertyIdentifier(subProperty), dataPropertyIdentifier(superProperty));
         } catch (Unreadable unreadable) {
             store.drop(unreadable.reason, subProperty + " -> " + superProperty);
         }
