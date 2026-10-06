@@ -73,6 +73,11 @@ public class DowlingGallierHornSAT {
 	
 	private int last_onto1_id;	
 	
+
+	//The restriction store's TOP proposition, seeded into every propagation so that what is
+	//attached to TOP (ranges, functionality) holds for every class; -1 when there is none
+	private int top = -1;
+	
 	
 	//private IndexManager index;
 	
@@ -212,7 +217,8 @@ public class DowlingGallierHornSAT {
 			fixedmappings, 
 			mappings,
 			mappings2ignore, 
-			Collections.<HornInclusion>emptyList()
+			Collections.<HornInclusion>emptyList(),
+			-1
 		);
 		
 	}
@@ -233,7 +239,7 @@ public class DowlingGallierHornSAT {
 			Map<Integer, Set<Integer>> fixedmappings,
 			Map<Integer, Set<Integer>> mappings,
 			Set<HornClause> mappings2ignore,
-			Collection<HornInclusion> restrictionClauses){		
+			Collection<HornInclusion> restrictionClauses, int top){
 		
 		
 		

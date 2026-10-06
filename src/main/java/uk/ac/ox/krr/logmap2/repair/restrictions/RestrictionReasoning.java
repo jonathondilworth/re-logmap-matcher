@@ -25,6 +25,11 @@ public final class RestrictionReasoning {
         this.store = index.getRestrictionStore();
     }
 
+    /** The proposition every propagation starts from besides the entity, so that clauses on TOP hold everywhere. */
+    public int top() {
+        return store.top();
+    }
+
     /**
      * @param fixedMappings correspondences already repaired, both directions, never masked
      * @param mappingsUnderRepair correspondences under repair, both directions of an equivalence
