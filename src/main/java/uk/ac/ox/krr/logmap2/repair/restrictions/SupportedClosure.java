@@ -2,6 +2,7 @@ package uk.ac.ox.krr.logmap2.repair.restrictions;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
@@ -45,6 +46,13 @@ public final class SupportedClosure {
             return Support.EMPTY;
         }
         return settle(from).get(to);
+    }
+
+    /** Everything `from` is below, itself included, each with its minimal support. */
+    public Map<Integer, Support> ancestorsOf(int from) {
+        Map<Integer, Support> ancestors = new HashMap<>(settle(from));
+        ancestors.put(from, Support.EMPTY);
+        return Collections.unmodifiableMap(ancestors);
     }
 
     private void addEdge(int from, Edge edge) {
