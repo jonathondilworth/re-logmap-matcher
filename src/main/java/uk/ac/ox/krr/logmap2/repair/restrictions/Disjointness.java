@@ -15,9 +15,11 @@ import uk.ac.ox.krr.logmap2.repair.hornSAT.Support;
  * explicitly disjoint, in LogMap's index or, for two nominals, as different individuals
  * in the store, ancestors and their supports coming from the class closure of the current
  * build; or when an ancestor of the one is a union every member of which is disjoint from
- * the other (never when only some member is: a successor may be in any member). The
- * answer is the smallest union of the supports over all such routes. TOP is disjoint from
- * nothing.
+ * the other (never when only some member is: a successor may be in any member). Each
+ * side expands a union at most once, so a union against a union is answered but a member
+ * that is itself below a further union is not followed: a sound omission that keeps the
+ * search bounded on corpora with many overlapping unions. The answer is the smallest
+ * union of the supports over all such routes. TOP is disjoint from nothing.
  */
 public final class Disjointness {
 
@@ -44,10 +46,15 @@ public final class Disjointness {
 
     /** The minimal support under which `first` and `second` are disjoint, or null. */
     public Support supportOf(int first, int second) {
-        return supportOf(first, second, new HashSet<>());
+        return supportOf(first, second, true, true);
     }
 
-    private Support supportOf(int first, int second, Set<Integer> unionsBeingExpanded) {
+    /**
+     * Each side may expand a union among its ancestors once: a member is then compared with
+     * the other side without expanding a further union on its own side, so the search is
+     * bounded (two expansions at most) and a union against a union is still answered.
+     */
+    private Support supportOf(int first, int second, boolean expandFirst, boolean expandSecond) {
         if (first == top || second == top) {
             return null;
         }
@@ -66,40 +73,33 @@ public final class Disjointness {
                 }
             }
         }
-        best = Support.least(best, throughUnions(ancestorsOfFirst, second, unionsBeingExpanded));
-        best = Support.least(best, throughUnions(ancestorsOfSecond, first, unionsBeingExpanded));
-
-        return best;
-    }
-
-    /**
-     * The all-members rule over each union among the ancestors: the union is disjoint
-     * from `other` when every member is. A union being expanded is passed over while its
-     * members are examined, since every member has it as an ancestor.
-     */
-    private Support throughUnions(Map<Integer, Support> ancestors, int other, Set<Integer> unionsBeingExpanded) {
-        Support best = null;
-
-        for (Map.Entry<Integer, Support> ancestor : ancestors.entrySet()) {
-            int union = ancestor.getKey();
-            if (!store.isUnion(union) || unionsBeingExpanded.contains(union)) {
-                continue;
+        if (expandFirst) {
+            for (Map.Entry<Integer, Support> ancestor : ancestorsOfFirst.entrySet()) {
+                if (store.isUnion(ancestor.getKey())) {
+                    Support members = allMembersSupport(ancestor.getKey(), second, expandSecond, true);
+                    best = Support.least(best, members == null ? null : ancestor.getValue().with(members));
+                }
             }
-            unionsBeingExpanded.add(union);
-            Support members = allMembersSupport(union, other, unionsBeingExpanded);
-            unionsBeingExpanded.remove(union);
-            if (members != null) {
-                best = Support.least(best, ancestor.getValue().with(members));
+        }
+        if (expandSecond) {
+            for (Map.Entry<Integer, Support> ancestor : ancestorsOfSecond.entrySet()) {
+                if (store.isUnion(ancestor.getKey())) {
+                    Support members = allMembersSupport(ancestor.getKey(), first, expandFirst, false);
+                    best = Support.least(best, members == null ? null : ancestor.getValue().with(members));
+                }
             }
         }
 
         return best;
     }
  
-    private Support allMembersSupport(int union, int other, Set<Integer> unionsBeingExpanded) {
+    /** The all-members rule: the union is disjoint from `other` when every member is. */
+    private Support allMembersSupport(int union, int other, boolean expandOther, boolean unionIsFirst) {
         Support total = Support.EMPTY;
         for (int member : store.membersOf(union)) {
-            Support memberSupport = supportOf(member, other, unionsBeingExpanded);
+            Support memberSupport = unionIsFirst
+                    ? supportOf(member, other, false, expandOther)
+                    : supportOf(other, member, expandOther, false);
             if (memberSupport == null) {
                 return null;
             }

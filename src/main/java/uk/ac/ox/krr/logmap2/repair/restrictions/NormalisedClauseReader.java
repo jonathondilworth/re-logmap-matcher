@@ -1,6 +1,9 @@
 package uk.ac.ox.krr.logmap2.repair.restrictions;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Comparator;
 import java.util.List;
 
 import org.semanticweb.HermiT.structural.OWLAxiomsAdapted;
@@ -51,7 +54,9 @@ import uk.ac.ox.krr.logmap2.utilities.Utilities;
  * are clauses on their nominals. A restriction over an inverse (`∃R⁻.C`) is an incoming
  * restriction over R, an inclusion with an inverse side a fact between signed
  * properties, and a domain or range yields its twin read through the inverse (`∃R.⊤ ⊑ D`
- * is `⊤ ⊑ ∀R⁻.D`).
+ * is `⊤ ⊑ ∀R⁻.D`). Everything is read in the order of its rendering, operands too: the
+ * normaliser's own order changes from run to run, and the store numbers propositions on
+ * first sight. docs/normaliser-probes.md §3, design spec §3.1a, §3.5a, §4.2, §7.6, §7.8.
  */
 final class NormalisedClauseReader {
 
@@ -68,22 +73,22 @@ final class NormalisedClauseReader {
     }
 
     void read(OWLAxiomsAdapted normalised) {
-        for (OWLClassExpression[] disjuncts : normalised.getNormalisedConceptInclusions()) {
+        for (OWLClassExpression[] disjuncts : sortedClauses(normalised.getNormalisedConceptInclusions())) {
             readConceptInclusion(disjuncts);
         }
-        for (OWLObjectPropertyExpression[] inclusion : normalised.getSimpleObjectPropertyInclusions()) {
+        for (OWLObjectPropertyExpression[] inclusion : sortedInclusions(normalised.getSimpleObjectPropertyInclusions())) {
             readPropertyInclusion(inclusion[0], inclusion[1]);
         }
-        for (OWLDataPropertyExpression[] inclusion : normalised.getDataPropertyInclusions()) {
+        for (OWLDataPropertyExpression[] inclusion : sortedInclusions(normalised.getDataPropertyInclusions())) {
             readDataPropertyInclusion(inclusion[0], inclusion[1]);
         }
-        for (OWLObjectPropertyExpression property : normalised.getReflexiveObjectProperties()) {
+        for (OWLObjectPropertyExpression property : sorted(normalised.getReflexiveObjectProperties())) {
             readReflexivity(property, false);
         }
-        for (OWLObjectPropertyExpression property : normalised.getIrreflexiveObjectProperties()) {
+        for (OWLObjectPropertyExpression property : sorted(normalised.getIrreflexiveObjectProperties())) {
             readReflexivity(property, true);
         }
-        for (OWLIndividualAxiom fact : normalised.getFacts()) {
+        for (OWLIndividualAxiom fact : sorted(normalised.getFacts())) {
             readFact(fact);
         }
         dropAll(normalised.getComplexObjectPropertyInclusionsAsChains(), DroppedClause.Reason.PROPERTY_CHAIN);
@@ -93,6 +98,32 @@ final class NormalisedClauseReader {
         dropAll(normalised.getDataRangeInclusions(), DroppedClause.Reason.DATA_AXIOM);
         dropAll(normalised.getHasKeys(), DroppedClause.Reason.KEY);
     }
+
+    /** The clauses in the order of their rendering, each clause's operands too. */
+    private static <T> List<T[]> sortedClauses(Collection<T[]> clauses) {
+        List<T[]> sorted = new ArrayList<>();
+        for (T[] clause : clauses) {
+            T[] operands = clause.clone();
+            Arrays.sort(operands, Comparator.comparing(Object::toString));
+            sorted.add(operands);
+        }
+        sorted.sort(Comparator.comparing(Arrays::toString));
+        return sorted;
+    }
+
+    /** Inclusions `sub ⊑ super` in the order of their rendering; the two sides keep their places. */
+    private static <T> List<T[]> sortedInclusions(Collection<T[]> inclusions) {
+        List<T[]> sorted = new ArrayList<>(inclusions);
+        sorted.sort(Comparator.comparing(Arrays::toString));
+        return sorted;
+    }
+
+    private static <T> List<T> sorted(Collection<T> items) {
+        List<T> sorted = new ArrayList<>(items);
+        sorted.sort(Comparator.comparing(Object::toString));
+        return sorted;
+    }
+
 
     // CONCEPT INCLUSIONS
 

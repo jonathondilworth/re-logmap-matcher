@@ -21,6 +21,7 @@ package uk.ac.ox.krr.logmap2.utilities;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -42,8 +43,12 @@ public class PrecomputeIndexCombination {
 	private List<Map<Integer, Set<Set<Integer>>>> precomputedCombinations = new ArrayList<Map<Integer, Set<Set<Integer>>>>();
 	
 	
-	private Set<Set<Integer>> maxIdentifierCombination = new HashSet<Set<Integer>>();
-	private Set<Set<Integer>> identifierCombination = new HashSet<Set<Integer>>();
+	// private Set<Set<Integer>> maxIdentifierCombination = new HashSet<Set<Integer>>();
+	// private Set<Set<Integer>> identifierCombination = new HashSet<Set<Integer>>();
+
+
+	private Set<Set<Integer>> maxIdentifierCombination = new LinkedHashSet<Set<Integer>>();
+	private Set<Set<Integer>> identifierCombination = new LinkedHashSet<Set<Integer>>();
 	private Set<Integer> combination = new HashSet<Integer>();
 	
 	private int size_combination=3; //Size of plan or size of words to be dropped
@@ -66,13 +71,13 @@ public class PrecomputeIndexCombination {
 			
 			//We are supposed to add in order: e.g. we look for plans of 2 before plans of 3		
 			precomputedCombinations.add(size_combo-1, new HashMap<Integer, Set<Set<Integer>>>());
-			precomputedCombinations.get(size_combo-1).put(size_object, new HashSet<Set<Integer>>(identifierCombination));
+			precomputedCombinations.get(size_combo-1).put(size_object, new LinkedHashSet<Set<Integer>>(identifierCombination));
 			
 		}
 		else if (!precomputedCombinations.get(size_combo-1).containsKey(size_object)){
 			extractIdentifierCombination(size_object, size_combo);
 						
-			precomputedCombinations.get(size_combo-1).put(size_object, new HashSet<Set<Integer>>(identifierCombination));
+			precomputedCombinations.get(size_combo-1).put(size_object, new LinkedHashSet<Set<Integer>>(identifierCombination));
 		}
 		
 
@@ -104,7 +109,8 @@ public class PrecomputeIndexCombination {
 				
 				//We insert in position 0
 				
-				precomputedCombinations.get(j-1).put(i, new HashSet<Set<Integer>>(identifierCombination));
+				// precomputedCombinations.get(j-1).put(i, new HashSet<Set<Integer>>(identifierCombination));
+				precomputedCombinations.get(j-1).put(i, new LinkedHashSet<Set<Integer>>(identifierCombination));
 				
 				
 			}
