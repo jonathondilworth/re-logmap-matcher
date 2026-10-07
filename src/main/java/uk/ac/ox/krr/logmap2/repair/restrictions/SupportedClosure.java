@@ -18,7 +18,9 @@ import uk.ac.ox.krr.logmap2.repair.hornSAT.Support;
  * cost one, and a 0-1 breadth-first search from each source settles every node with the
  * cheapest path. A fact-only path therefore always wins over a shorter path through a
  * correspondence, so an empty support means the fact holds from the ontologies alone.
- * Design spec §6.1–6.3.
+ * An edge that holds under several directions at once (an S-link's) is a chain of
+ * correspondence edges through hidden nodes, one direction per edge, so it costs one per
+ * direction and the search stays the same; hidden nodes never appear in an answer.
  */
 public final class SupportedClosure {
 
@@ -29,8 +31,12 @@ public final class SupportedClosure {
         }
     }
 
+    /** Propositions are never negative and FALSE is -2, so hidden nodes count down from -3. */
+    private static final int FIRST_HIDDEN_NODE = -3;
+
     private final Map<Integer, List<Edge>> edgesFrom = new HashMap<>();
     private final Map<Integer, Map<Integer, Support>> settledFrom = new HashMap<>();
+    private int nextHiddenNode = FIRST_HIDDEN_NODE;
 
     public void addFact(int from, int to) {
         addEdge(from, new Edge(to, null));
@@ -39,6 +45,23 @@ public final class SupportedClosure {
     public void addCorrespondence(int from, int to, CorrespondenceDirection direction) {
         addEdge(from, new Edge(to, direction));
     }
+
+    /** `from ⊑ to` under every direction of the support: a fact when it is empty. */
+    public void addSupported(int from, int to, Support support) {
+        List<CorrespondenceDirection> directions = new ArrayList<>(support.directions());
+        if (directions.isEmpty()) {
+            addFact(from, to);
+            return;
+        }
+        int node = from;
+        for (CorrespondenceDirection direction : directions.subList(0, directions.size() - 1)) {
+            int hidden = nextHiddenNode--;
+            addCorrespondence(node, hidden, direction);
+            node = hidden;
+        }
+        addCorrespondence(node, to, directions.get(directions.size() - 1));
+    }
+
 
     /** The minimal support under which `from ⊑ to` holds, or null when it does not. */
     public Support supportOf(int from, int to) {
@@ -95,6 +118,7 @@ public final class SupportedClosure {
         }
 
         supportOf.remove(source);
+        supportOf.keySet().removeIf(node -> node <= FIRST_HIDDEN_NODE);
         settledFrom.put(source, supportOf);
         return supportOf;
     }

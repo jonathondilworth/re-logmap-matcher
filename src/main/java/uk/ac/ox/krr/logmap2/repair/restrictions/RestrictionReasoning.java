@@ -14,7 +14,9 @@ import uk.ac.ox.krr.logmap2.repair.hornSAT.HornInclusion;
 /**
  * The restriction clauses of one Dowling–Gallier build: the store's own clauses plus the
  * links and clashes derived from the current correspondences. Rebuilt at every build, so a
- * correspondence removed by an earlier plan no longer supports anything.
+ * correspondence removed by an earlier plan no longer supports anything. Derivation takes
+ * two passes: the S-links of both kinds first, then the clashes, whose class disjointness
+ * walks the class closure bridged by those links and by the store's attachments.
  */
 public final class RestrictionReasoning {
 
@@ -47,9 +49,18 @@ public final class RestrictionReasoning {
         FillerRelations classFillers = new ClassFillers(store, classes, new Disjointness(index, store, classes));
         FillerRelations datatypeFillers = new DatatypeFillers(store);
 
+        List<HornInclusion> objectLinks = new SubsumptionLinkRules(store, PropertyKind.OBJECT, objectProperties, classFillers).links();
+        List<HornInclusion> dataLinks = new SubsumptionLinkRules(store, PropertyKind.DATA, dataProperties, datatypeFillers).links();
+
+        SupportedClosure bridge = bridgedClosure(classClosure(fixedMappings, mappingsUnderRepair, removedDirections), objectLinks, dataLinks);
+        FillerRelations bridgedClassFillers = new ClassFillers(store, classes, new Disjointness(index, store, bridge));
+
+
         List<HornInclusion> clauses = new ArrayList<>(store.inclusions());
-        clauses.addAll(rulesOver(PropertyKind.OBJECT, objectProperties, classFillers));
-        clauses.addAll(rulesOver(PropertyKind.DATA, dataProperties, datatypeFillers));
+        clauses.addAll(objectLinks);
+        clauses.addAll(clashesOver(PropertyKind.OBJECT, objectProperties, bridgedClassFillers));
+        clauses.addAll(dataLinks);
+        clauses.addAll(clashesOver(PropertyKind.DATA, dataProperties, datatypeFillers));
         return clauses;
     }
 
@@ -58,16 +69,46 @@ public final class RestrictionReasoning {
         return new DatatypeFillers(store);
     }
 
-    /** The links and clashes among the restrictions of one property kind. */
-    private List<HornInclusion> rulesOver(PropertyKind kind, SupportedClosure properties, FillerRelations fillers) {
+    /** The clashes, and for object properties the self-edge memberships, among the restrictions of one property kind. */
+    private List<HornInclusion> clashesOver(PropertyKind kind, SupportedClosure properties, FillerRelations fillers) {
         Functionality functionality = new Functionality(store, kind, properties);
         List<HornInclusion> clauses = new ArrayList<>();
-        clauses.addAll(new SubsumptionLinkRules(store, kind, properties, fillers).links());
         if (kind == PropertyKind.OBJECT) {
             clauses.addAll(new SelfRules(store, properties, functionality).memberships());
         }
         return clauses;
     }
+
+    
+    /**
+     * A fresh class closure extended with the edges that hold through a restriction: the
+     * store's single-atom clauses with a restriction on either side (attachments `A → r`,
+     * `r → B`, companions), and this build's S-links, each under its own support. A TOP
+     * body, a conjunctive body and FALSE give no edge. Every edge is a genuine inclusion,
+     * so a disjointness found through them is one. Design spec §6.1b.
+     */
+    private SupportedClosure bridgedClosure(SupportedClosure classes, List<HornInclusion> objectLinks,
+            List<HornInclusion> dataLinks) {
+        for (HornInclusion inclusion : store.inclusions()) {
+            if (isThroughARestriction(inclusion)) {
+                classes.addFact(inclusion.body().get(0), inclusion.head());
+            }
+        }
+        for (List<HornInclusion> links : List.of(objectLinks, dataLinks)) {
+            for (HornInclusion link : links) {
+                classes.addSupported(link.body().get(0), link.head(), link.support());
+            }
+        }
+        return classes;
+    }
+
+    private boolean isThroughARestriction(HornInclusion inclusion) {
+        if (inclusion.body().size() != 1 || inclusion.isClash() || store.isTop(inclusion.body().get(0))) {
+            return false;
+        }
+        return store.isRestriction(inclusion.body().get(0)) || store.isRestriction(inclusion.head());
+    }
+
 
     private SupportedClosure classClosure(Map<Integer, Set<Integer>> fixedMappings,
             Map<Integer, Set<Integer>> mappingsUnderRepair, Set<HornClause> removedDirections) {
