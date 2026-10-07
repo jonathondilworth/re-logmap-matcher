@@ -20,6 +20,9 @@ package uk.ac.ox.krr.logmap2.repair;
 
 import java.util.Comparator;
 
+import uk.ac.ox.krr.logmap2.repair.hornSAT.HornClause;
+import uk.ac.ox.krr.logmap2.repair.hornSAT.PropertyDirectionClause;
+
 /**
  * 
  * This class compares plans
@@ -45,8 +48,19 @@ public class RepairmentPlanComparator implements Comparator<RepairmentPlan> {
 			else if (plan1.getConfidence() < plan2.getConfidence())
 				return -1;
 			else
-				return 0;
+				// if equal confidence we weaken property correspondences before class ones
+				return getNumPropertyDirections(plan2) - getNumPropertyDirections(plan1);
 		}
+	}
+	
+	
+	private int getNumPropertyDirections(RepairmentPlan plan){
+		int num = 0;
+		for (HornClause mapping : plan.getMappings()){
+			if (mapping instanceof PropertyDirectionClause)
+				num++;
+		}
+		return num;
 	}
 
 }
