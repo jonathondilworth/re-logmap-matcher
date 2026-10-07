@@ -12,9 +12,10 @@ import uk.ac.ox.krr.logmap2.repair.hornSAT.Support;
  * it is its own R′-successor); HS2, `hasSelf(R) ∧ ≥n P.Z → Z` (n ≥ 1) when R and P lie
  * below one functional property (the self-edge and the Z-successor are one individual).
  * Neither is a clash: the head is a class, and whatever excludes it closes the conflict.
- * A TOP head says nothing and is skipped. Irreflexivity needs no rule: `Irreflexive(R)` is
- * the clause `hasSelf(R) → FALSE`, and self-edges link along the property hierarchy like
- * any restriction (HS3). Object properties only.
+ * A TOP head says nothing and is skipped. A self-edge holds in both orientations, so the
+ * self-edge's property is tried both ways (§7.3a). Irreflexivity needs no rule:
+ * `Irreflexive(R)` is the clause `hasSelf(R) → FALSE`, and self-edges link along the
+ * property hierarchy like any restriction (HS3). Object properties only.
  */
 final class SelfRules {
 
@@ -40,11 +41,14 @@ final class SelfRules {
                 if (store.isTop(other.filler())) {
                     continue;
                 }
+                int selfEdge = self.propertyToken();
                 Support support = null;
                 if (other.isUniversal()) {
-                    support = properties.supportOf(self.property(), other.property());
+                    support = Support.least(properties.supportOf(selfEdge, other.propertyToken()),
+                            properties.supportOf(SignedProperties.flip(selfEdge), other.propertyToken()));
                 } else if (other.isExistential()) {
-                    support = functionality.mergeSupportOf(self.property(), other.property());
+                    support = Support.least(functionality.mergeSupportOf(selfEdge, other.propertyToken()),
+                            functionality.mergeSupportOf(SignedProperties.flip(selfEdge), other.propertyToken()));
                 }
                 if (support != null) {
                     memberships.add(HornInclusion.of(

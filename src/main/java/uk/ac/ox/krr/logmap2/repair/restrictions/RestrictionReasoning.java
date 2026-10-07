@@ -105,13 +105,25 @@ public final class RestrictionReasoning {
         return classes;
     }
 
-    /** The sub-property facts of one kind, and each surviving direction of that kind as a supported edge. */
+    /**
+     * The sub-property facts of one kind, and each surviving direction of that kind as a
+     * supported edge, over signed properties. Every object edge `S ⊑ T` also holds as
+     * `S⁻ ⊑ T⁻` (the inverse is monotone), so each fact and each direction enters with
+     * its flipped dual, the direction's dual under the same support: the mirrored link
+     * of design spec §6.1a.
+     */
     private SupportedClosure propertyClosure(PropertyKind kind, CorrespondenceDirection.Kind directionKind,
             Collection<CorrespondenceDirection> propertyDirections) {
         SupportedClosure properties = subPropertyFacts(kind);
         for (CorrespondenceDirection direction : propertyDirections) {
-            if (direction.kind() == directionKind) {
-                properties.addCorrespondence(direction.origin(), direction.target(), direction);
+            if (direction.kind() != directionKind) {
+                continue;
+            }
+            int origin = SignedProperties.outgoing(direction.origin());
+            int target = SignedProperties.outgoing(direction.target());
+            properties.addCorrespondence(origin, target, direction);
+            if (kind == PropertyKind.OBJECT) {
+                properties.addCorrespondence(SignedProperties.flip(origin), SignedProperties.flip(target), direction);
             }
         }
         return properties;
@@ -123,6 +135,9 @@ public final class RestrictionReasoning {
         for (int subProperty : store.propertiesWithSuperProperties(kind)) {
             for (int superProperty : store.superPropertiesOf(kind, subProperty)) {
                 properties.addFact(subProperty, superProperty);
+                if (kind == PropertyKind.OBJECT) {
+                    properties.addFact(SignedProperties.flip(subProperty), SignedProperties.flip(superProperty));
+                }
             }
         }
         return properties;

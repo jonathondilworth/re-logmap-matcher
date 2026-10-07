@@ -27,6 +27,17 @@ public record Support(SortedSet<CorrespondenceDirection> directions) {
         union.addAll(other.directions);
         return new Support(union);
     }
+    
+    /** The smaller of two answers, either of which may be null (no answer). */
+    public static Support least(Support first, Support second) {
+        if (first == null) {
+            return second;
+        }
+        if (second == null || first.size() <= second.size()) {
+            return first;
+        }
+        return second;
+    }
 
     public boolean isEmpty() {
         return directions.isEmpty();

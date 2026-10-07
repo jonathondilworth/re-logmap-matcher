@@ -1,7 +1,9 @@
 package uk.ac.ox.krr.logmap2.repair.restrictions;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import uk.ac.ox.krr.logmap2.repair.hornSAT.HornInclusion;
 import uk.ac.ox.krr.logmap2.repair.hornSAT.Support;
@@ -9,8 +11,10 @@ import uk.ac.ox.krr.logmap2.repair.hornSAT.Support;
 /**
  * The clash rules between two restrictions: each conclusion is the
  * clause `r1 ∧ r2 → FALSE`, supported by the union of the supports of its conditions.
- * D1, D2 and D3 so far; the other D-rules join as methods. One instance per property
- * kind: the rules are the same over data properties, with data ranges as fillers.
+ * D1, D2, D3, and D6, whose clause is `r1 ∧ A → FALSE` with a class A; D4 and D5
+ * are D2 and D1 on TOP. Property conditions are over signed properties. One instance per
+ * property kind: the rules are the same over data properties, with data ranges as
+ * fillers, and D6 is for object properties alone, which have inverses.
  */
 final class ClashRules {
 
@@ -19,6 +23,7 @@ final class ClashRules {
     private final SupportedClosure properties;
     private final FillerRelations fillers;
     private final Functionality functionality;
+    private final Map<Integer, List<Integer>> attachedClasses = new HashMap<>();
 
     ClashRules(RestrictionStore store, PropertyKind kind, SupportedClosure properties, FillerRelations fillers, Functionality functionality) {
         this.store = store;
@@ -26,6 +31,12 @@ final class ClashRules {
         this.properties = properties;
         this.fillers = fillers;
         this.functionality = functionality;
+        for (HornInclusion inclusion : store.inclusions()) {
+            if (inclusion.body().size() == 1 && store.isRestriction(inclusion.body().get(0))
+                    && inclusion.head() != HornInclusion.FALSE && !store.isRestriction(inclusion.head())) {
+                attachedClasses.computeIfAbsent(inclusion.body().get(0), restriction -> new ArrayList<>()).add(inclusion.head());
+            }
+        }
     }
 
     /** Every clash between two restrictions of this kind, in identifier order. */
@@ -38,6 +49,9 @@ final class ClashRules {
                 addClash(clashes, first, second, d2(first, second));
                 if (store.identifierOf(first) < store.identifierOf(second)) {
                     addClash(clashes, first, second, d3(first, second));
+                }
+                if (kind == PropertyKind.OBJECT) {
+                    d6(clashes, first, second);
                 }
             }
         }
@@ -64,7 +78,7 @@ final class ClashRules {
         if (!existential.isExistential() || !universal.isUniversal()) {
             return null;
         }
-        Support propertySupport = properties.supportOf(existential.property(), universal.property());
+        Support propertySupport = properties.supportOf(existential.propertyToken(), universal.propertyToken());
         if (propertySupport == null) {
             return null;
         }
@@ -90,7 +104,7 @@ final class ClashRules {
         if (lowerBound.cardinality() <= upperBound.cardinality()) {
             return null;
         }
-        Support propertySupport = properties.supportOf(lowerBound.property(), upperBound.property());
+        Support propertySupport = properties.supportOf(lowerBound.propertyToken(), upperBound.propertyToken());
         if (propertySupport == null) {
             return null;
         }
@@ -112,7 +126,7 @@ final class ClashRules {
         if (!first.isExistential() || !second.isExistential()) {
             return null;
         }
-        Support mergeSupport = functionality.mergeSupportOf(first.property(), second.property());
+        Support mergeSupport = functionality.mergeSupportOf(first.propertyToken(), second.propertyToken());
         if (mergeSupport == null) {
             return null;
         }
@@ -121,6 +135,36 @@ final class ClashRules {
             return null;
         }
         return mergeSupport.with(fillerSupport);
+    }
+
+    /**
+     * D6, an incoming existential composed with an attachment: `≥n1 P1.F1` clashes with the
+     * class A′ when some `≥n2 P2.A′` (A′ not TOP) has a class C attached to it in the store
+     * (`≥n2 P2.A′ → C`), P1⁻ ⊑p P2, and F1, C are disjoint. An individual in both has a
+     * P1-successor y in F1; the individual is then a P1⁻-successor of y, so a
+     * P2-successor, and it is in A′, so y is in `≥n2 P2.A′` and hence in C; but y is in F1,
+     * disjoint from C. The clause is `r1 ∧ A′ → FALSE`; A′ reaches it through the theory's
+     * own arcs.
+     */
+    private void d6(List<HornInclusion> clashes, Restriction first, Restriction second) {
+        if (!first.isExistential() || !second.isExistential() || store.isTop(second.filler())) {
+            return;
+        }
+        List<Integer> attached = attachedClasses.get(store.identifierOf(second));
+        if (attached == null) {
+            return;
+        }
+        Support propertySupport = properties.supportOf(SignedProperties.flip(first.propertyToken()), second.propertyToken());
+        if (propertySupport == null) {
+            return;
+        }
+        for (int attachedClass : attached) {
+            Support fillerSupport = fillers.disjointness(first.filler(), attachedClass);
+            if (fillerSupport != null) {
+                clashes.add(HornInclusion.of(List.of(store.identifierOf(first), second.filler()), HornInclusion.FALSE,
+                        propertySupport.with(fillerSupport)));
+            }
+        }
     }
 
 

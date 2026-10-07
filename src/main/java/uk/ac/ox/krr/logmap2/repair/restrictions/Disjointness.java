@@ -62,12 +62,12 @@ public final class Disjointness {
             }
             for (Map.Entry<Integer, Support> ancestorOfSecond : ancestorsOfSecond.entrySet()) {
                 if (disjointFromAncestor.contains(ancestorOfSecond.getKey())) {
-                    best = smaller(best, ancestorOfFirst.getValue().with(ancestorOfSecond.getValue()));
+                    best = Support.least(best, ancestorOfFirst.getValue().with(ancestorOfSecond.getValue()));
                 }
             }
         }
-        best = smaller(best, throughUnions(ancestorsOfFirst, second, unionsBeingExpanded));
-        best = smaller(best, throughUnions(ancestorsOfSecond, first, unionsBeingExpanded));
+        best = Support.least(best, throughUnions(ancestorsOfFirst, second, unionsBeingExpanded));
+        best = Support.least(best, throughUnions(ancestorsOfSecond, first, unionsBeingExpanded));
 
         return best;
     }
@@ -89,7 +89,7 @@ public final class Disjointness {
             Support members = allMembersSupport(union, other, unionsBeingExpanded);
             unionsBeingExpanded.remove(union);
             if (members != null) {
-                best = smaller(best, ancestor.getValue().with(members));
+                best = Support.least(best, ancestor.getValue().with(members));
             }
         }
 
@@ -106,16 +106,6 @@ public final class Disjointness {
             total = total.with(memberSupport);
         }
         return total;
-    }
-
-    private static Support smaller(Support best, Support candidate) {
-        if (candidate == null) {
-            return best;
-        }
-        if (best == null || candidate.size() < best.size()) {
-            return candidate;
-        }
-        return best;
     }
 
     private void addBothWays(int first, int second) {

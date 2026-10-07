@@ -48,7 +48,10 @@ import uk.ac.ox.krr.logmap2.utilities.Utilities;
  * nominal `{a}` (or a single literal) and is read as one; a hasSelf is a restriction of its
  * own with the companion `hasSelf(R) → ∃R.⊤`; reflexivity and irreflexivity are clauses on
  * that restriction; the types and the distinctness of the individuals under a hasValue
- * are clauses on their nominals. docs/normaliser-probes.md §3, design spec §4.2, §7.8.
+ * are clauses on their nominals. A restriction over an inverse (`∃R⁻.C`) is an incoming
+ * restriction over R, an inclusion with an inverse side a fact between signed
+ * properties, and a domain or range yields its twin read through the inverse (`∃R.⊤ ⊑ D`
+ * is `⊤ ⊑ ∀R⁻.D`).
  */
 final class NormalisedClauseReader {
 
@@ -183,6 +186,32 @@ final class NormalisedClauseReader {
             body.add(store.top());
         }
         store.add(HornInclusion.of(body, head));
+        addOrientationTwin(body, head);
+    }
+
+    /**
+     * A domain and a range are one fact read two ways: `∃R.⊤ ⊑ D` is `⊤ ⊑ ∀R⁻.D` and
+     * `⊤ ⊑ ∀R.E` is `∃R⁻.⊤ ⊑ E`; each gets its twin, so that an incoming restriction meets
+     * it through the ordinary rules (design spec §3.5a, the dom facts).
+     */
+    private void addOrientationTwin(List<Integer> body, int head) {
+        if (body.size() != 1) {
+            return;
+        }
+        int single = body.get(0);
+        if (store.isRestriction(single) && head != HornInclusion.FALSE && !store.isRestriction(head)) {
+            Restriction domain = store.restriction(single);
+            if (domain.propertyKind() == PropertyKind.OBJECT && domain.kind() == RestrictionKind.SOME && store.isTop(domain.filler())) {
+                store.add(HornInclusion.of(List.of(store.top()),
+                        store.intern(Restriction.only(domain.property(), !domain.incoming(), head))));
+            }
+        } else if (store.isTop(single) && store.isRestriction(head)) {
+            Restriction range = store.restriction(head);
+            if (range.propertyKind() == PropertyKind.OBJECT && range.isUniversal()) {
+                store.add(HornInclusion.of(
+                        List.of(store.intern(Restriction.some(range.property(), !range.incoming(), store.top()))), range.filler()));
+            }
+        }
     }
 
 
@@ -262,7 +291,7 @@ final class NormalisedClauseReader {
     }
 
 
-    /** `hasSelf(R)`, with its companion `hasSelf(R) → ∃R.⊤` added on first sight. */
+    /** `hasSelf(R)`, with its companion `hasSelf(R) → ∃R.⊤` added on first sight; `hasSelf(R⁻)` is the same self-edge. */
     private int selfProposition(OWLObjectPropertyExpression property) {
         int propertyIdentifier = propertyIdentifier(property);
         int self = store.intern(Restriction.self(propertyIdentifier, store.top()));
@@ -287,19 +316,19 @@ final class NormalisedClauseReader {
     /** `∃R.C` and `≥n R.C`, whose dual (a `≤n-1`) is an atom only for n ≥ 2. */
     private Literal readExistential(OWLObjectPropertyExpression property, int cardinality, OWLClassExpression filler) {
         int propertyIdentifier = propertyIdentifier(property);
-        
+        boolean incoming = property.isAnonymous();
         if (filler instanceof OWLObjectComplementOf complement) {
             if (cardinality != 1) {
                 throw new Unreadable(DroppedClause.Reason.COMPLEMENT_FILLER);
             }
-            return Literal.body(store.intern(Restriction.only(propertyIdentifier, fillerProposition(complement.getOperand()))));
+            return Literal.body(store.intern(Restriction.only(propertyIdentifier, incoming, fillerProposition(complement.getOperand()))));
         }
         
         int fillerIdentifier = fillerProposition(filler);
-        int proposition = store.intern(Restriction.atLeast(cardinality, propertyIdentifier, fillerIdentifier));
+        int proposition = store.intern(Restriction.atLeast(cardinality, propertyIdentifier, incoming, fillerIdentifier));
         
         if (cardinality >= 2) {
-            return Literal.headWithDual(proposition, Restriction.atMost(cardinality - 1, propertyIdentifier, fillerIdentifier));
+            return Literal.headWithDual(proposition, Restriction.atMost(cardinality - 1, propertyIdentifier, incoming, fillerIdentifier));
         }
         
         return Literal.head(proposition);
@@ -309,27 +338,29 @@ final class NormalisedClauseReader {
     /** `∀R.C`; `∀R.¬C` is the body atom `∃R.C`, `∀R.⊥` the body atom `∃R.⊤`. */
     private Literal readUniversal(OWLObjectPropertyExpression property, OWLClassExpression filler) {
         int propertyIdentifier = propertyIdentifier(property);
+        boolean incoming = property.isAnonymous();
         if (filler instanceof OWLObjectComplementOf complement) {
-            return Literal.body(store.intern(Restriction.some(propertyIdentifier, fillerProposition(complement.getOperand()))));
+            return Literal.body(store.intern(Restriction.some(propertyIdentifier, incoming, fillerProposition(complement.getOperand()))));
         }
         if (filler.isOWLNothing()) {
-            return Literal.body(store.intern(Restriction.some(propertyIdentifier, store.top())));
+            return Literal.body(store.intern(Restriction.some(propertyIdentifier, incoming, store.top())));
         }
-        return Literal.head(store.intern(Restriction.only(propertyIdentifier, fillerProposition(filler))));
+        return Literal.head(store.intern(Restriction.only(propertyIdentifier, incoming, fillerProposition(filler))));
     }
 
     /** `≤n R.C`, whose dual is the body atom `≥n+1 R.C`. */
     private Literal readAtMost(OWLObjectPropertyExpression property, int cardinality, OWLClassExpression filler) {
         int propertyIdentifier = propertyIdentifier(property);
+        boolean incoming = property.isAnonymous();
         if (filler instanceof OWLObjectComplementOf) {
             throw new Unreadable(DroppedClause.Reason.COMPLEMENT_FILLER);
         }
         int fillerIdentifier = fillerProposition(filler);
         if (cardinality == 0) {
-            return Literal.body(store.intern(Restriction.some(propertyIdentifier, fillerIdentifier)));
+            return Literal.body(store.intern(Restriction.some(propertyIdentifier, incoming, fillerIdentifier)));
         }
-        int proposition = store.intern(Restriction.atMost(cardinality, propertyIdentifier, fillerIdentifier));
-        return Literal.headWithDual(proposition, Restriction.atLeast(cardinality + 1, propertyIdentifier, fillerIdentifier));
+        int proposition = store.intern(Restriction.atMost(cardinality, propertyIdentifier, incoming, fillerIdentifier));
+        return Literal.headWithDual(proposition, Restriction.atLeast(cardinality + 1, propertyIdentifier, incoming, fillerIdentifier));
     }
 
 
@@ -471,16 +502,18 @@ final class NormalisedClauseReader {
         throw new Unreadable(DroppedClause.Reason.UNSUPPORTED_DATA_RANGE);
     }
 
-
+    /** The identifier of the named property, of `R` and of `R⁻` alike. */
     private int propertyIdentifier(OWLObjectPropertyExpression property) {
-        if (property.isAnonymous()) {
-            throw new Unreadable(DroppedClause.Reason.INVERSE_PROPERTY);
-        }
-        String iri = property.asOWLObjectProperty().getIRI().toString();
+        String iri = property.getNamedProperty().getIRI().toString();
         if (index.getTypeOfEntity4IRI(iri) != Utilities.OBJECTPROPERTIES) {
             throw new Unreadable(DroppedClause.Reason.UNKNOWN_ENTITY);
         }
         return index.getObjectPropIdentifier4IRI(iri);
+    }
+
+    /** The signed property of an expression: `R` outgoing, `R⁻` incoming. */
+    private int propertyToken(OWLObjectPropertyExpression property) {
+        return SignedProperties.token(propertyIdentifier(property), property.isAnonymous());
     }
 
 
@@ -498,9 +531,10 @@ final class NormalisedClauseReader {
 
     // property inclusions
 
+    /** `R ⊑ S`, `R ⊑ S⁻` (an inverse pair or a symmetric property arrives so) as a fact between signed properties. */
     private void readPropertyInclusion(OWLObjectPropertyExpression subProperty, OWLObjectPropertyExpression superProperty) {
         try {
-            store.addSubProperty(PropertyKind.OBJECT, propertyIdentifier(subProperty), propertyIdentifier(superProperty));
+            store.addSubProperty(PropertyKind.OBJECT, propertyToken(subProperty), propertyToken(superProperty));
         } catch (Unreadable unreadable) {
             store.drop(unreadable.reason, subProperty + " -> " + superProperty);
         }
@@ -508,7 +542,8 @@ final class NormalisedClauseReader {
 
     private void readDataPropertyInclusion(OWLDataPropertyExpression subProperty, OWLDataPropertyExpression superProperty) {
         try {
-            store.addSubProperty(PropertyKind.DATA, dataPropertyIdentifier(subProperty), dataPropertyIdentifier(superProperty));
+            store.addSubProperty(PropertyKind.DATA, SignedProperties.outgoing(dataPropertyIdentifier(subProperty)),
+                    SignedProperties.outgoing(dataPropertyIdentifier(superProperty)));
         } catch (Unreadable unreadable) {
             store.drop(unreadable.reason, subProperty + " -> " + superProperty);
         }

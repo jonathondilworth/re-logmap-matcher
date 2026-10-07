@@ -8,10 +8,11 @@ import uk.ac.ox.krr.logmap2.repair.hornSAT.HornInclusion;
 import uk.ac.ox.krr.logmap2.repair.hornSAT.Support;
 
 /**
- * Which properties are functional, read from the store's clauses attached to TOP
- * (`TOP → atMost(1, F, TOP)` is `Functional(F)`; `rdfs:Literal` is the top for a data
- * property), and under which support a property lies below a functional one through the
- * property closure of its kind. Functionality reaches down the property hierarchy only.
+ * Which signed properties are functional, read from the store's clauses attached to TOP
+ * (`TOP → atMost(1, F, TOP)` is `Functional(F)`, `TOP → atMost(1, F⁻, TOP)` is
+ * `InverseFunctional(F)`; `rdfs:Literal` is the top for a data property), and under
+ * which support a signed property lies below a functional one through the property
+ * closure of its kind. Functionality reaches down the property hierarchy only.
  */
 final class Functionality {
 
@@ -22,14 +23,15 @@ final class Functionality {
         this.properties = properties;
         for (HornInclusion inclusion : store.inclusions()) {
             if (isFunctionalityOfTop(store, kind, inclusion)) {
-                functionalProperties.add(store.restriction(inclusion.head()).property());
+                functionalProperties.add(store.restriction(inclusion.head()).propertyToken());
             }
         }
     }
 
     /**
-     * The smallest support under which both properties lie below one functional property,
-     * so that a successor through each is the same individual; null when there is none.
+     * The smallest support under which both signed properties lie below one functional
+     * property, so that a successor through each is the same individual; null when there
+     * is none.
      */
     Support mergeSupportOf(int firstProperty, int secondProperty) {
         Support best = null;
@@ -40,10 +42,7 @@ final class Functionality {
             if (first == null || second == null) {
                 continue;
             }
-            Support candidate = first.with(second);
-            if (best == null || candidate.size() < best.size()) {
-                best = candidate;
-            }
+            best = Support.least(best, first.with(second));
         }
 
         return best;

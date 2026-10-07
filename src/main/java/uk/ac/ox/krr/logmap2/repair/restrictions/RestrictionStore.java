@@ -280,6 +280,7 @@ public final class RestrictionStore {
         inclusions.add(inclusion);
     }
 
+    /** `sub ⊑ super` between signed properties (SignedProperties); a data property is always its outgoing token. */
     void addSubProperty(PropertyKind kind, int subProperty, int superProperty) {
         superPropertiesOf.get(kind).computeIfAbsent(subProperty, property -> new TreeSet<>()).add(superProperty);
     }
@@ -296,7 +297,7 @@ public final class RestrictionStore {
         return Collections.unmodifiableCollection(inclusions);
     }
 
-    /** The asserted super-properties of a property of that kind (named properties only). */
+    /** The asserted super-properties of a signed property of that kind, as signed properties. */
     public SortedSet<Integer> superPropertiesOf(PropertyKind kind, int property) {
         SortedSet<Integer> superProperties = superPropertiesOf.get(kind).get(property);
         if (superProperties == null) {
@@ -354,7 +355,7 @@ public final class RestrictionStore {
     }
 
     public String describe(Restriction restriction) {
-        String property = describeProperty(restriction.propertyKind(), restriction.property());
+        String property = describeSignedProperty(restriction.propertyKind(), restriction.propertyToken());
         if (restriction.kind() == RestrictionKind.SELF) {
             return "self(" + property + ")";
         }
@@ -367,6 +368,12 @@ public final class RestrictionStore {
 
     public String describeProperty(int objectProperty) {
         return describeProperty(PropertyKind.OBJECT, objectProperty);
+    }
+
+    /** A signed property in words: `o1:p1`, or `inv(o1:p1)` for its inverse. */
+    public String describeSignedProperty(PropertyKind kind, int token) {
+        String property = describeProperty(kind, SignedProperties.identifier(token));
+        return SignedProperties.isIncoming(token) ? "inv(" + property + ")" : property;
     }
 
     public String describeProperty(PropertyKind kind, int property) {
