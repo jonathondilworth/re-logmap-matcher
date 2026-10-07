@@ -39,9 +39,11 @@ import uk.ac.ox.krr.logmap2.utilities.Utilities;
  * Reads HermiT's normalised clauses of one ontology into the store. Each concept
  * inclusion is a disjunction of literals; a negated class is a body atom, a restriction
  * that is the dual of an atom (`∀R.¬C`, `∀R.⊥`, `∃R.¬C`, `≤n`, `≥n`) is read as that atom
- * in the body, and what remains is the head. The clause is kept when exactly one head
- * remains; a clause over named classes only is left to LogMap's index; everything else is
- * dropped with a reason. Data restrictions are read the same way, with data ranges as
+ * in the body, and what remains is the head. Several remaining heads that are all classes
+ * (a union: a domain or range over a union, HermiT's definition of a union filler, a
+ * plain `A ⊑ B ⊔ C`) become one union proposition above its members; a union with a
+ * restriction among its heads is dropped. A clause over named classes only is left to
+ * LogMap's index; everything else is dropped with a reason. Data restrictions are read the same way, with data ranges as
  * fillers and `rdfs:Literal` as their top. A hasValue arrives as an existential over a
  * nominal `{a}` (or a single literal) and is read as one; a hasSelf is a restriction of its
  * own with the companion `hasSelf(R) → ∃R.⊤`; reflexivity and irreflexivity are clauses on
@@ -138,27 +140,38 @@ final class NormalisedClauseReader {
         }
 
         List<Integer> body = new ArrayList<>();
-        List<Literal> heads = new ArrayList<>();
+        List<Literal> fixedHeads = new ArrayList<>();
+        List<Literal> dualHeads = new ArrayList<>();
 
         for (Literal literal : literals) {
             if (literal.inBody()) {
                 body.add(literal.proposition());
+            } else if (literal.hasDual()) {
+                dualHeads.add(literal);
             } else {
-                heads.add(literal);
+                fixedHeads.add(literal);
             }
         }
 
-        Literal head = chooseHead(heads);
-
-        for (Literal otherHead : heads) {
-            if (otherHead == head) {
-                continue;
+        int head;
+        if (fixedHeads.size() > 1) {
+            for (Literal member : fixedHeads) {
+                if (store.isRestriction(member.proposition())) {
+                    store.drop(DroppedClause.Reason.NOT_HORN, describe(disjuncts));
+                    return;
+                }
             }
-            if (!otherHead.hasDual()) {
-                store.drop(DroppedClause.Reason.NOT_HORN, describe(disjuncts));
-                return;
-            }
-            body.add(store.intern(otherHead.dual()));
+            head = unionProposition(fixedHeads);
+            mentionsRestrictionOrFreshClass = true;
+        } else if (fixedHeads.size() == 1) {
+            head = fixedHeads.get(0).proposition();
+        } else if (!dualHeads.isEmpty()) {
+            head = dualHeads.remove(0).proposition();
+        } else {
+            head = HornInclusion.FALSE;
+        }
+        for (Literal dualHead : dualHeads) {
+            body.add(store.intern(dualHead.dual()));
             mentionsRestrictionOrFreshClass = true;
         }
 
@@ -169,19 +182,22 @@ final class NormalisedClauseReader {
         if (body.isEmpty()) {
             body.add(store.top());
         }
-        store.add(HornInclusion.of(body, head == null ? HornInclusion.FALSE : head.proposition()));
+        store.add(HornInclusion.of(body, head));
     }
 
 
-    // A head that cannot become a body atom is kept as the head; otherwise the first head
-    private static Literal chooseHead(List<Literal> heads) {
-        for (Literal head : heads) {
-            if (!head.hasDual()) {
-                return head;
-            }
+    /** The union of several class heads, with the edge `member → union` for each, added on first sight. */
+    private int unionProposition(List<Literal> members) {
+        List<Integer> propositions = new ArrayList<>();
+        for (Literal member : members) {
+            propositions.add(member.proposition());
         }
-        return heads.isEmpty() ? null : heads.get(0);
-    }
+        int union = store.internUnion(propositions);
+        for (int member : store.membersOf(union)) {
+            store.add(HornInclusion.of(List.of(member), union));
+         }
+        return union;
+     }
 
 
     /** A proposition the index does not know: a restriction, a fresh class or a nominal. */

@@ -27,8 +27,8 @@ import uk.ac.ox.krr.logmap2.repair.hornSAT.HornInclusion;
  * them to named and fresh classes and the property inclusions, read from HermiT's
  * normalisation of each ontology. Propositions are ints: LogMap's own identifiers for
  * named classes, and identifiers above every LogMap identifier for TOP, the data top,
- * fresh classes, data ranges and restrictions, so that they can enter Dowling–Gallier's
- * propositional theory unchanged.
+ * fresh classes, nominals, unions, data ranges and restrictions, so that they can enter
+ * Dowling–Gallier's propositional theory unchanged.
  * The store is filled once per ontology while the ontology is alive, and read at every
  * repair.
  */
@@ -48,6 +48,12 @@ public final class RestrictionStore {
 
     private final Map<DataRange, Integer> identifierOfDataRange = new HashMap<>();
     private final SortedMap<Integer, DataRange> dataRangeOfIdentifier = new TreeMap<>();
+
+    private final Map<String, Integer> identifierOfNominal = new HashMap<>();
+    private final SortedMap<Integer, String> nominalOfIdentifier = new TreeMap<>();
+
+    private final Map<List<Integer>, Integer> identifierOfUnion = new HashMap<>();
+    private final SortedMap<Integer, List<Integer>> membersOfUnion = new TreeMap<>();
 
     private final Set<HornInclusion> inclusions = new LinkedHashSet<>();
     private final Map<PropertyKind, SortedMap<Integer, SortedSet<Integer>>> superPropertiesOf = new EnumMap<>(PropertyKind.class);
@@ -129,6 +135,26 @@ public final class RestrictionStore {
         return freshClassOfIdentifier.containsKey(proposition);
     }
 
+    /** A nominal `{a}`, the filler HermiT gives a hasValue. */
+    public boolean isNominal(int proposition) {
+        return nominalOfIdentifier.containsKey(proposition);
+    }
+
+    /** A union of class propositions, the proposition a clause with several heads points to. */
+    public boolean isUnion(int proposition) {
+        return membersOfUnion.containsKey(proposition);
+    }
+
+    /** The members of a union, in identifier order. */
+    public List<Integer> membersOf(int union) {
+        List<Integer> members = membersOfUnion.get(union);
+        if (members == null) {
+            throw new IllegalArgumentException(union + " is not a union proposition");
+        }
+        return members;
+    }
+
+
     /** The proposition of a restriction, allocated on first sight. */
     int intern(Restriction restriction) {
         Integer known = identifierOfRestriction.get(restriction);
@@ -153,6 +179,44 @@ public final class RestrictionStore {
         freshClassOfIdentifier.put(identifier, key);
         return identifier;
     }
+
+    /**
+     * The proposition of a nominal, allocated on first sight and keyed by the individual's
+     * IRI alone: an individual is one thing whichever ontology mentions it.
+     */
+    int internNominal(String individualIri) {
+        Integer known = identifierOfNominal.get(individualIri);
+        if (known != null) {
+            return known;
+        }
+        int identifier = nextIdentifier++;
+        identifierOfNominal.put(individualIri, identifier);
+        nominalOfIdentifier.put(identifier, individualIri);
+        return identifier;
+    }
+
+    /**
+     * The proposition of a union, allocated on first sight and keyed by its member set,
+     * which two ontologies may share; the reader adds the edges from the members.
+     */
+    int internUnion(Collection<Integer> members) {
+        List<Integer> key = new ArrayList<>(new TreeSet<>(members));
+        Integer known = identifierOfUnion.get(key);
+        if (known != null) {
+            return known;
+        }
+        int identifier = nextIdentifier++;
+        identifierOfUnion.put(key, identifier);
+        membersOfUnion.put(identifier, Collections.unmodifiableList(key));
+        return identifier;
+    }
+
+
+    /** The nominal of an individual some hasValue has mentioned, or null. */
+    Integer nominalOf(String individualIri) {
+        return identifierOfNominal.get(individualIri);
+    }
+
 
     /** The proposition of a data range, allocated on first sight; `rdfs:Literal` is the data top. */
     int internDataRange(DataRange dataRange) {
@@ -251,7 +315,7 @@ public final class RestrictionStore {
 
     // description
 
-    /** A proposition in words: `o1:A1`, `o2:def#0`, `TOP`, `xsd:integer`, `some(o1:p1, o1:C1)`. */
+    /** A proposition in words: `o1:A1`, `o2:def#0`, `{a}`, `union(o1:B1, o1:C1)`, `TOP`, `xsd:integer`, `some(o1:p1, o1:C1)`. */
     public String describe(int proposition) {
         if (proposition == HornInclusion.FALSE) {
             return "FALSE";
@@ -268,6 +332,17 @@ public final class RestrictionStore {
         if (isRestriction(proposition)) {
             return describe(restriction(proposition));
         }
+        if (isNominal(proposition)) {
+            return "{" + localName(nominalOfIdentifier.get(proposition)) + "}";
+        }
+        if (isUnion(proposition)) {
+            List<String> members = new ArrayList<>();
+            for (int member : membersOf(proposition)) {
+                members.add(describe(member));
+            }
+            Collections.sort(members);
+            return "union(" + String.join(", ", members) + ")";
+        }
         if (isFreshClass(proposition)) {
             String[] ontologyAndIri = freshClassOfIdentifier.get(proposition).split(" ", 2);
             int ontologyNumber = Integer.parseInt(ontologyAndIri[0]);
@@ -280,6 +355,9 @@ public final class RestrictionStore {
 
     public String describe(Restriction restriction) {
         String property = describeProperty(restriction.propertyKind(), restriction.property());
+        if (restriction.kind() == RestrictionKind.SELF) {
+            return "self(" + property + ")";
+        }
         String filler = describe(restriction.filler());
         if (restriction.kind() == RestrictionKind.SOME || restriction.kind() == RestrictionKind.ONLY) {
             return restriction.kind().displayName() + "(" + property + ", " + filler + ")";
@@ -314,6 +392,7 @@ public final class RestrictionStore {
     public List<String> report() {
         List<String> lines = new ArrayList<>();
         lines.add(restrictions().size() + " restrictions, " + dataRangeOfIdentifier.size() + " data ranges, "
+                + nominalOfIdentifier.size() + " nominals, " + membersOfUnion.size() + " unions, "
                 + inclusions.size() + " clauses, "
                 + superPropertiesOf.get(PropertyKind.OBJECT).size() + " object properties and "
                 + superPropertiesOf.get(PropertyKind.DATA).size() + " data properties with super-properties, "

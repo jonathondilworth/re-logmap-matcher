@@ -8,7 +8,7 @@ package uk.ac.ox.krr.logmap2.repair.restrictions;
 public record DroppedClause(Reason reason, String description) {
 
     public enum Reason {
-        NOT_HORN("two or more heads (a union)"),
+        NOT_HORN("two or more heads with a restriction among them (a union the store cannot name)"),
         INVERSE_PROPERTY("a restriction or inclusion over an inverse property"),
         DATA_AXIOM("a disjoint-data-properties axiom or a datatype definition"),
         UNSUPPORTED_DATA_RANGE("a data range other than a datatype or a facet restriction"),
