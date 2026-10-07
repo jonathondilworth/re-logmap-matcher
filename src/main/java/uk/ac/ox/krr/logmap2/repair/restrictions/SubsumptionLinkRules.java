@@ -10,8 +10,10 @@ import uk.ac.ox.krr.logmap2.repair.hornSAT.Support;
  * The subsumption links between restrictions, rules S1–S3 of design spec §7.2: `some`
  * and `≥n` are monotone in the property and the filler and downward in the number; `only`
  * is monotone in the filler and anti-monotone in the property; `≤n` is anti-monotone in
- * both and upward in the number. Each link `r1 → r2` carries the union of the supports of
- * its property and filler conditions.
+ * both and upward in the number; a self-edge is monotone in the property alone (§7.8,
+ * the link HS3 needs). Each link `r1 → r2` carries the union of the supports of its
+ * property and filler conditions. One instance per property kind: the rules are the same
+ * over data properties, with data ranges as fillers.
  */
 final class SubsumptionLinkRules {
 
@@ -57,6 +59,9 @@ final class SubsumptionLinkRules {
         if (from.kind() == RestrictionKind.AT_MOST && to.kind() == RestrictionKind.AT_MOST
                 && from.cardinality() <= to.cardinality()) {
             return s3(from, to);
+        }
+        if (from.kind() == RestrictionKind.SELF && to.kind() == RestrictionKind.SELF) {
+            return subProperty(from.property(), to.property());
         }
         return null;
     }

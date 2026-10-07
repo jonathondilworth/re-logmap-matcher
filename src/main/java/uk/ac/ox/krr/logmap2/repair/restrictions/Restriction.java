@@ -4,8 +4,9 @@ package uk.ac.ox.krr.logmap2.repair.restrictions;
  * One restriction as it occurs in a normalised ontology, in LogMap's int vocabulary: the
  * property is an object- or data-property identifier (the kind says which, since the two
  * are numbered separately) and the filler is a proposition of the store (a named class
- * identifier, a fresh class or TOP for an object property; a data range or the data top
- * for a data property). Two occurrences with the same components are the same
+ * identifier, a fresh class, a nominal or TOP for an object property; a data range or the
+ * data top for a data property; TOP for a self-edge, which has no filler of its own). Two
+ * occurrences with the same components are the same
  * restriction, which is what lets the store give each restriction one proposition.
  */
 
@@ -32,6 +33,9 @@ public record Restriction(RestrictionKind kind, PropertyKind propertyKind, int p
         }
         if (kind == RestrictionKind.AT_MOST && cardinality < 1) {
             throw new IllegalArgumentException("at-most 0 is read as the absence of a successor; got " + cardinality);
+        }
+        if (kind == RestrictionKind.SELF && (propertyKind != PropertyKind.OBJECT || cardinality != 0)) {
+            throw new IllegalArgumentException("self is a self-edge over an object property and carries no cardinality");
         }
     }
 
@@ -69,6 +73,11 @@ public record Restriction(RestrictionKind kind, PropertyKind propertyKind, int p
 
     public static Restriction atMost(PropertyKind propertyKind, int cardinality, int property, int filler) {
         return new Restriction(RestrictionKind.AT_MOST, propertyKind, property, cardinality, filler);
+    }
+
+    /** `hasSelf(R)`, a self-edge; TOP stands in for the filler it does not have. */
+    public static Restriction self(int property, int top) {
+        return new Restriction(RestrictionKind.SELF, PropertyKind.OBJECT, property, 0, top);
     }
 
     public boolean isExistential() {

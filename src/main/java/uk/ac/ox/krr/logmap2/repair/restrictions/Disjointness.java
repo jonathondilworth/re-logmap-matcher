@@ -6,14 +6,16 @@ import java.util.Map;
 import java.util.Set;
 
 import uk.ac.ox.krr.logmap2.indexing.IndexManager;
+import uk.ac.ox.krr.logmap2.repair.hornSAT.HornInclusion;
 import uk.ac.ox.krr.logmap2.repair.hornSAT.Support;
 
 /**
  * Answers whether two class propositions are disjoint, and under which correspondence
  * directions: they are when an ancestor of the one and an ancestor of the other are
- * explicitly disjoint in LogMap's index, ancestors and their supports coming from the
- * class closure of the current build. The answer is the smallest union of the two
- * supports over all such pairs. TOP is disjoint from nothing.
+ * explicitly disjoint, in LogMap's index or, for two nominals, as different individuals
+ * in the store, ancestors and their supports coming from the class closure of the current
+ * build. The answer is the smallest union of the two supports over all such pairs. TOP is
+ * disjoint from nothing.
  */
 public final class Disjointness {
 
@@ -21,12 +23,17 @@ public final class Disjointness {
     private final SupportedClosure classes;
     private final int top;
 
-    public Disjointness(IndexManager index, SupportedClosure classes, int top) {
+    public Disjointness(IndexManager index, RestrictionStore store, SupportedClosure classes) {
         this.classes = classes;
-        this.top = top;
+        this.top = store.top();
         for (Map.Entry<Integer, Set<Integer>> classAndDisjoint : index.getDirectDisjointClasses().entrySet()) {
             for (int disjoint : classAndDisjoint.getValue()) {
                 addBothWays(classAndDisjoint.getKey(), disjoint);
+            }
+        }
+        for (HornInclusion inclusion : store.inclusions()) {
+            if (inclusion.isClash() && inclusion.body().size() == 2 && store.isNominal(inclusion.body().get(0)) && store.isNominal(inclusion.body().get(1))) {
+                addBothWays(inclusion.body().get(0), inclusion.body().get(1));
             }
         }
     }

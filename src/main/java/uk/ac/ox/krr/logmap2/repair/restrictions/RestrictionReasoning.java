@@ -44,7 +44,7 @@ public final class RestrictionReasoning {
         SupportedClosure classes = classClosure(fixedMappings, mappingsUnderRepair, removedDirections);
         SupportedClosure objectProperties = propertyClosure(PropertyKind.OBJECT, CorrespondenceDirection.Kind.OBJECT_PROPERTY, propertyDirections);
         SupportedClosure dataProperties = propertyClosure(PropertyKind.DATA, CorrespondenceDirection.Kind.DATA_PROPERTY, propertyDirections);
-        FillerRelations classFillers = new ClassFillers(store, classes, new Disjointness(index, classes, store.top()));
+        FillerRelations classFillers = new ClassFillers(store, classes, new Disjointness(index, store, classes));
         FillerRelations datatypeFillers = new DatatypeFillers(store);
 
         List<HornInclusion> clauses = new ArrayList<>(store.inclusions());
@@ -63,7 +63,9 @@ public final class RestrictionReasoning {
         Functionality functionality = new Functionality(store, kind, properties);
         List<HornInclusion> clauses = new ArrayList<>();
         clauses.addAll(new SubsumptionLinkRules(store, kind, properties, fillers).links());
-        clauses.addAll(new ClashRules(store, kind, properties, fillers, functionality).clashes());
+        if (kind == PropertyKind.OBJECT) {
+            clauses.addAll(new SelfRules(store, properties, functionality).memberships());
+        }
         return clauses;
     }
 

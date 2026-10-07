@@ -1,15 +1,17 @@
 package uk.ac.ox.krr.logmap2.repair.restrictions;
 
 /**
- * The four kinds of object-property restriction the repair reasons about:
- *   \exists R.C (some; >= 1)   \forall R.C (only)    \geq R.C     \leq R.C
+ * The kinds of restriction the repair reasons about: `∃R.C`, `∀R.C`, `≥n R.C`, `≤n R.C`
+ * and `hasSelf(R)`. `some` is `≥1`, kept apart because it is by far the most common and
+ * carries no number; `self` has no filler of its own.
  */
 public enum RestrictionKind {
     
     SOME("some"),
     ONLY("only"),
     AT_LEAST("atLeast"),    // min
-    AT_MOST("atMost");      // max
+    AT_MOST("atMost"),      // max
+    SELF("self");
 
     private final String displayName;
 

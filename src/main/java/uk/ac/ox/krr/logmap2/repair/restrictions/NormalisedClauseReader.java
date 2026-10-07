@@ -5,6 +5,7 @@ import java.util.List;
 
 import org.semanticweb.HermiT.structural.OWLAxiomsAdapted;
 import org.semanticweb.owlapi.model.OWLClass;
+import org.semanticweb.owlapi.model.OWLClassAssertionAxiom;
 import org.semanticweb.owlapi.model.OWLClassExpression;
 import org.semanticweb.owlapi.model.OWLDataAllValuesFrom;
 import org.semanticweb.owlapi.model.OWLDataComplementOf;
@@ -16,6 +17,10 @@ import org.semanticweb.owlapi.model.OWLDataRange;
 import org.semanticweb.owlapi.model.OWLDataSomeValuesFrom;
 import org.semanticweb.owlapi.model.OWLDatatype;
 import org.semanticweb.owlapi.model.OWLDatatypeRestriction;
+import org.semanticweb.owlapi.model.OWLDifferentIndividualsAxiom;
+import org.semanticweb.owlapi.model.OWLIndividual;
+import org.semanticweb.owlapi.model.OWLIndividualAxiom;
+import org.semanticweb.owlapi.model.OWLLiteral;
 import org.semanticweb.owlapi.model.OWLObjectAllValuesFrom;
 import org.semanticweb.owlapi.model.OWLObjectCardinalityRestriction;
 import org.semanticweb.owlapi.model.OWLObjectComplementOf;
@@ -37,7 +42,11 @@ import uk.ac.ox.krr.logmap2.utilities.Utilities;
  * in the body, and what remains is the head. The clause is kept when exactly one head
  * remains; a clause over named classes only is left to LogMap's index; everything else is
  * dropped with a reason. Data restrictions are read the same way, with data ranges as
- * fillers and `rdfs:Literal` as their top.
+ * fillers and `rdfs:Literal` as their top. A hasValue arrives as an existential over a
+ * nominal `{a}` (or a single literal) and is read as one; a hasSelf is a restriction of its
+ * own with the companion `hasSelf(R) → ∃R.⊤`; reflexivity and irreflexivity are clauses on
+ * that restriction; the types and the distinctness of the individuals under a hasValue
+ * are clauses on their nominals. docs/normaliser-probes.md §3, design spec §4.2, §7.8.
  */
 final class NormalisedClauseReader {
 
@@ -63,14 +72,20 @@ final class NormalisedClauseReader {
         for (OWLDataPropertyExpression[] inclusion : normalised.getDataPropertyInclusions()) {
             readDataPropertyInclusion(inclusion[0], inclusion[1]);
         }
+        for (OWLObjectPropertyExpression property : normalised.getReflexiveObjectProperties()) {
+            readReflexivity(property, false);
+        }
+        for (OWLObjectPropertyExpression property : normalised.getIrreflexiveObjectProperties()) {
+            readReflexivity(property, true);
+        }
+        for (OWLIndividualAxiom fact : normalised.getFacts()) {
+            readFact(fact);
+        }
         dropAll(normalised.getComplexObjectPropertyInclusionsAsChains(), DroppedClause.Reason.PROPERTY_CHAIN);
         dropAll(normalised.getDisjointObjectProperties(), DroppedClause.Reason.DISJOINT_PROPERTIES);
-        dropAll(normalised.getReflexiveObjectProperties(), DroppedClause.Reason.PROPERTY_CHARACTERISTIC);
-        dropAll(normalised.getIrreflexiveObjectProperties(), DroppedClause.Reason.PROPERTY_CHARACTERISTIC);
         dropAll(normalised.getAsymmetricObjectProperties(), DroppedClause.Reason.PROPERTY_CHARACTERISTIC);
         dropAll(normalised.getDisjointDataProperties(), DroppedClause.Reason.DATA_AXIOM);
         dropAll(normalised.getDataRangeInclusions(), DroppedClause.Reason.DATA_AXIOM);
-        dropAll(normalised.getFacts(), DroppedClause.Reason.ASSERTION);
         dropAll(normalised.getHasKeys(), DroppedClause.Reason.KEY);
     }
 
@@ -119,7 +134,7 @@ final class NormalisedClauseReader {
                 return;
             }
             literals.add(literal);
-            mentionsRestrictionOrFreshClass |= isRestrictionOrFreshClass(literal);
+            mentionsRestrictionOrFreshClass |= isOfTheStore(literal);
         }
 
         List<Integer> body = new ArrayList<>();
@@ -169,9 +184,11 @@ final class NormalisedClauseReader {
     }
 
 
-    private boolean isRestrictionOrFreshClass(Literal literal) {
-        return store.isRestriction(literal.proposition()) || store.isFreshClass(literal.proposition());
-    }
+    /** A proposition the index does not know: a restriction, a fresh class or a nominal. */
+    private boolean isOfTheStore(Literal literal) {
+        return store.isRestriction(literal.proposition()) || store.isFreshClass(literal.proposition())
+                || store.isNominal(literal.proposition());
+     }
 
 
     private Literal readLiteral(OWLClassExpression disjunct) {
@@ -205,6 +222,12 @@ final class NormalisedClauseReader {
         if (disjunct instanceof OWLDataMaxCardinality atMost) {
             return readDataAtMost(atMost.getProperty(), atMost.getCardinality(), atMost.getFiller());
         }
+        if (disjunct instanceof OWLObjectHasSelf self) {
+            return Literal.head(selfProposition(self.getProperty()));
+        }
+        if (disjunct instanceof OWLObjectOneOf nominal) {
+            return Literal.head(nominalProposition(nominal));
+        }
         throw new Unreadable(reasonFor(disjunct));
     }
 
@@ -213,8 +236,36 @@ final class NormalisedClauseReader {
         if (operand instanceof OWLClass owlClass) {
             return Literal.body(classProposition(owlClass));
         }
+        if (operand instanceof OWLObjectHasSelf self) {
+            return Literal.body(selfProposition(self.getProperty()));
+        }
+        if (operand instanceof OWLObjectOneOf nominal) {
+            return Literal.body(nominalProposition(nominal));
+        }
         throw new Unreadable(reasonFor(operand));
     }
+
+
+    /** `hasSelf(R)`, with its companion `hasSelf(R) → ∃R.⊤` added on first sight. */
+    private int selfProposition(OWLObjectPropertyExpression property) {
+        int propertyIdentifier = propertyIdentifier(property);
+        int self = store.intern(Restriction.self(propertyIdentifier, store.top()));
+        store.add(HornInclusion.of(List.of(self), store.intern(Restriction.some(propertyIdentifier, store.top()))));
+        return self;
+    }
+
+    /** `{a}`, a single named individual; several individuals are an enumeration, which is dropped. */
+    private int nominalProposition(OWLObjectOneOf nominal) {
+        if (nominal.getIndividuals().size() != 1) {
+            throw new Unreadable(DroppedClause.Reason.ENUMERATION);
+        }
+        OWLIndividual individual = nominal.getIndividuals().iterator().next();
+        if (individual.isAnonymous()) {
+            throw new Unreadable(DroppedClause.Reason.OTHER);
+        }
+        return store.internNominal(individual.asOWLNamedIndividual().getIRI().toString());
+    }
+
 
 
     /** `∃R.C` and `≥n R.C`, whose dual (a `≤n-1`) is an atom only for n ≥ 2. */
@@ -365,6 +416,9 @@ final class NormalisedClauseReader {
         if (filler instanceof OWLClass owlClass) {
             return classProposition(owlClass);
         }
+        if (filler instanceof OWLObjectOneOf nominal) {
+            return nominalProposition(nominal);
+        }
         throw new Unreadable(reasonFor(filler));
     }
 
@@ -383,7 +437,7 @@ final class NormalisedClauseReader {
     }
 
 
-    /** A datatype or a facet restriction; enumerations wait for step 11, anything else is dropped. */
+    /** A datatype, a facet restriction or a single literal (a data hasValue); anything else is dropped. */
     private int dataRangeProposition(OWLDataRange range) {
         if (range instanceof OWLDatatype datatype) {
             return store.internDataRange(DataRange.of(datatype));
@@ -391,8 +445,12 @@ final class NormalisedClauseReader {
         if (range instanceof OWLDatatypeRestriction restriction) {
             return store.internDataRange(DataRange.of(restriction));
         }
-        if (range instanceof OWLDataOneOf) {
-            throw new Unreadable(DroppedClause.Reason.HAS_VALUE);
+        if (range instanceof OWLDataOneOf enumeration) {
+            if (enumeration.getValues().size() != 1) {
+                throw new Unreadable(DroppedClause.Reason.ENUMERATION);
+            }
+            OWLLiteral literal = enumeration.getValues().iterator().next();
+            return store.internDataRange(DataRange.of(literal));
         }
         throw new Unreadable(DroppedClause.Reason.UNSUPPORTED_DATA_RANGE);
     }
@@ -411,12 +469,6 @@ final class NormalisedClauseReader {
 
 
     private static DroppedClause.Reason reasonFor(OWLClassExpression expression) {
-        if (expression instanceof OWLObjectHasSelf) {
-            return DroppedClause.Reason.HAS_SELF;
-        }
-        if (expression instanceof OWLObjectOneOf) {
-            return DroppedClause.Reason.HAS_VALUE;
-        }
         if (expression instanceof OWLObjectCardinalityRestriction
                 || expression instanceof OWLObjectSomeValuesFrom
                 || expression instanceof OWLObjectAllValuesFrom
@@ -445,6 +497,68 @@ final class NormalisedClauseReader {
             store.drop(unreadable.reason, subProperty + " -> " + superProperty);
         }
     }
+
+    // property characteristics and facts
+
+    /** `Reflexive(R)` is `TOP → hasSelf(R)`, `Irreflexive(R)` is `hasSelf(R) → FALSE`. */
+    private void readReflexivity(OWLObjectPropertyExpression property, boolean irreflexive) {
+        try {
+            int self = selfProposition(property);
+            if (irreflexive) {
+                store.add(HornInclusion.of(List.of(self), HornInclusion.FALSE));
+            } else {
+                store.add(HornInclusion.of(List.of(store.top()), self));
+            }
+        } catch (Unreadable unreadable) {
+            store.drop(unreadable.reason, (irreflexive ? "irreflexive " : "reflexive ") + property);
+        }
+    }
+
+    /**
+     * The one ABox reading, for the individuals some hasValue mentions: a named type is the
+     * clause `{a} → T`, a distinctness the clash `{a} ∧ {b} → FALSE`. Everything else is
+     * dropped: individuals no hasValue mentions never enter Dowling–Gallier.
+     */
+    private void readFact(OWLIndividualAxiom fact) {
+        if (fact instanceof OWLClassAssertionAxiom assertion
+                && assertion.getClassExpression() instanceof OWLClass type && !type.isOWLThing()) {
+            Integer nominal = knownNominal(assertion.getIndividual());
+            if (nominal != null) {
+                try {
+                    store.add(HornInclusion.of(List.of(nominal), classProposition(type)));
+                } catch (Unreadable unreadable) {
+                    store.drop(unreadable.reason, describe(fact));
+                }
+                return;
+            }
+        }
+        if (fact instanceof OWLDifferentIndividualsAxiom different) {
+            List<Integer> nominals = new ArrayList<>();
+            for (OWLIndividual individual : different.getIndividuals()) {
+                Integer nominal = knownNominal(individual);
+                if (nominal != null) {
+                    nominals.add(nominal);
+                }
+            }
+            if (nominals.size() >= 2) {
+                for (int first = 0; first < nominals.size(); first++) {
+                    for (int second = first + 1; second < nominals.size(); second++) {
+                        store.add(HornInclusion.of(List.of(nominals.get(first), nominals.get(second)), HornInclusion.FALSE));
+                    }
+                }
+                return;
+            }
+        }
+        store.drop(DroppedClause.Reason.ASSERTION, describe(fact));
+    }
+
+    private Integer knownNominal(OWLIndividual individual) {
+        if (individual.isAnonymous()) {
+            return null;
+        }
+        return store.nominalOf(individual.asOWLNamedIndividual().getIRI().toString());
+    }
+
 
     private void dropAll(Iterable<?> axioms, DroppedClause.Reason reason) {
         for (Object axiom : axioms) {
