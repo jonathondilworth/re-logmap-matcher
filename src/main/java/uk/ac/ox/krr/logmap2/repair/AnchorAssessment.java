@@ -27,6 +27,9 @@ import java.util.PriorityQueue;
 import java.util.Queue;
 import java.util.Set;
 import java.util.Vector;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.TreeSet;
 
 import uk.ac.ox.krr.logmap2.Parameters;
 import uk.ac.ox.krr.logmap2.io.LogOutput;
@@ -36,6 +39,10 @@ import uk.ac.ox.krr.logmap2.mappings.CandidateMappingManager;
 import uk.ac.ox.krr.logmap2.repair.hornSAT.DowlingGallierHornSAT;
 import uk.ac.ox.krr.logmap2.repair.hornSAT.HornClause;
 import uk.ac.ox.krr.logmap2.repair.hornSAT.Link;
+import uk.ac.ox.krr.logmap2.repair.hornSAT.CorrespondenceDirection;
+import uk.ac.ox.krr.logmap2.repair.hornSAT.PropertyDirectionClause;
+import uk.ac.ox.krr.logmap2.repair.restrictions.RestrictionReasoning;
+import uk.ac.ox.krr.logmap2.utilities.Utilities;
 import uk.ac.ox.krr.logmap2.utilities.PrecomputeIndexCombination;
 import uk.ac.ox.krr.logmap2.io.*;
 
@@ -67,6 +74,8 @@ public class AnchorAssessment {
 	//private OntologyProcessing onto_process2;
 	
 	private MappingManager mapping_extractor;
+
+	private RestrictionReasoning restrictionReasoning;
 	
 	
 	//private WriteFile writer_plans;
@@ -83,6 +92,9 @@ public class AnchorAssessment {
 	
 	
 	private Map<Integer, Boolean> unsatClasses2repaired;
+
+	/**Classes unsatisfiable with no correspondence to blame: reported, never repaired*/
+	private Set<Integer> preexistingIncoherence = new HashSet<Integer>();
 
 		
 	//private Set<HornClause> plan = new HashSet<HornClause>();
@@ -147,6 +159,7 @@ public class AnchorAssessment {
 		this.index=index;
 		this.mapping_extractor=mapping_extractor;
 		
+		restrictionReasoning = new RestrictionReasoning(index);
 				
 		//We precompute indexes		 
 		precomputeIndexCombination.preComputeIdentifierCombination();
@@ -184,6 +197,8 @@ public class AnchorAssessment {
 		
 		unsatClasses2repaired = new HashMap<Integer, Boolean>();
 		
+		preexistingIncoherence = new HashSet<Integer>();
+
 		ignoreLinks = new HashMap<Integer, Set<Link>>();	
 		
 		
@@ -218,6 +233,7 @@ public class AnchorAssessment {
 			index.setSmallProjection4MappedEntities(mapped_entities);
 		}
 		
+		List<CorrespondenceDirection> propertyDirections = survivingPropertyDirections();
 			
 		dgSat = new DowlingGallierHornSAT(
 				index.getDirectSubClasses(useProjection),
@@ -228,10 +244,45 @@ public class AnchorAssessment {
 				index.getDirectIndividualClassTypes(),
 				mapping_extractor.getFixedMappings(),
 				mappings2repair,
-				hornMappings2Remove);
+				hornMappings2Remove,
+				restrictionReasoning.clausesFor(
+					mapping_extractor.getFixedMappings(),
+					mappings2repair,
+					hornMappings2Remove,
+					propertyDirections
+				), 
+				propertyDirections, 
+				restrictionReasoning.top()
+			);
 		
 		
 	}
+
+
+	/**
+	 * The directions of the object and data property anchors the repair has not removed, in source order
+	 */
+	private List<CorrespondenceDirection> survivingPropertyDirections(){
+		List<CorrespondenceDirection> directions = new ArrayList<CorrespondenceDirection>();
+		for (int source : new TreeSet<Integer>(mapping_extractor.getObjectPropertyAnchors().keySet())){
+			int target = mapping_extractor.getObjectPropertyAnchors().get(source);
+			int direction = mapping_extractor.getObjectPropertyAnchorDirection(source);
+			if (direction!=Utilities.R2L)
+				directions.add(CorrespondenceDirection.ofObjectProperties(source, target));
+			if (direction!=Utilities.L2R)
+				directions.add(CorrespondenceDirection.ofObjectProperties(target, source));
+		}
+		for (int source : new TreeSet<Integer>(mapping_extractor.getDataPropertyAnchors().keySet())){
+			int target = mapping_extractor.getDataPropertyAnchors().get(source);
+			int direction = mapping_extractor.getDataPropertyAnchorDirection(source);
+			if (direction!=Utilities.R2L)
+				directions.add(CorrespondenceDirection.ofDataProperties(source, target));
+			if (direction!=Utilities.L2R)
+				directions.add(CorrespondenceDirection.ofDataProperties(target, source));
+		}
+ 		return directions;
+ 	}
+	
 	
 	
 	/**
@@ -607,6 +658,14 @@ public class AnchorAssessment {
 				//In some cases there are side effect between mappings and we need to collect more mappings
 				completeSetOfConflictiveMappings(cls, dgSat.getConflictiveMappings());  
 				
+				//No correspondence to blame: the input ontologies are incoherent on their own here
+				if (dgSat.getConflictiveMappings().isEmpty()){
+					if (preexistingIncoherence.add(cls)){
+						LogOutput.printAlways("Pre-existing incoherence: " + index.getIRIStr4ConceptIndex(cls)
+								+ " is unsatisfiable without any correspondence; not repaired");
+					}
+					continue;
+				}
 
 				//only if thre is not a class with same set of conflictive mappings
 				//We store unsat class with set of conflictive classes
@@ -889,6 +948,10 @@ public class AnchorAssessment {
 	}
 	
 	
+	public Set<Integer> getPreexistingIncoherence(){
+		return preexistingIncoherence;
+	}
+
 	
 	/**
 	 * This method evaluates the satisfiability of the integration together withh the given mappings
@@ -1134,9 +1197,27 @@ public class AnchorAssessment {
 				//There is a plan
 				unsatClasses2repaired.put(entity, true);
 				
-				hornMappings2Remove.addAll(selectedPlan.getMappings());//For future D&G settings
+				// hornMappings2Remove.addAll(selectedPlan.getMappings());//For future D&G settings
 				
 				for (HornClause clausemap : selectedPlan.getMappings()){ //For current D&G setting
+
+					//A property direction is applied at once (the next build reads the anchor's new state)
+					//and masked for the rest of this build; the class bookkeeping below is not for it
+					if (clausemap instanceof PropertyDirectionClause direction){
+						Map<Integer, Integer> anchors = direction.isDataProperty()
+								? mapping_extractor.getDataPropertyAnchors() : mapping_extractor.getObjectPropertyAnchors();
+						boolean sourceToTarget = anchors.containsKey(direction.source());
+						int source = sourceToTarget ? direction.source() : direction.target();
+						if (direction.isDataProperty())
+							mapping_extractor.removeDataPropertyAnchorDirection(source, sourceToTarget);
+						else
+							mapping_extractor.removeObjectPropertyAnchorDirection(source, sourceToTarget);
+						dgSat.addGeneralLink2Ignore(direction.getLeftHS1(), direction.getLabel(), direction.getRightHS());
+						continue;
+					}
+					
+					hornMappings2Remove.add(clausemap);//For future D&G settings
+
 					//General!Ignorelinks
 					//TODO we add both sides to easy cleaning
 					//TODO Later weakened mappings will be assessed again
@@ -1273,7 +1354,18 @@ public class AnchorAssessment {
 		//LogOutput.print("\tISUB: " + ide1 + " - " + ide2 + " " + mapping_clause.getDirImplication());
 		//LogOutput.print("\tISUB: " + ide1 + " -> " + ide2 + " " + mapping_extractor.getISUB4Mapping(mapping_clause.getLeftHS1(), mapping_clause.getRightHS()));
 		//LogOutput.print("\tSCOPE:  " + ide1 + " -> " + ide2 + " " + mapping_extractor.getScope4Mapping(mapping_clause.getLeftHS1(), mapping_clause.getRightHS()));
-		
+
+		if (mapping_clause instanceof PropertyDirectionClause direction){
+			if (direction.isDataProperty()){
+				if (mapping_extractor.getDataPropertyAnchors().containsKey(direction.source()))
+					return mapping_extractor.getConfidence4DataPropertyAnchor(direction.source(), direction.target());
+				return mapping_extractor.getConfidence4DataPropertyAnchor(direction.target(), direction.source());
+			}
+			if (mapping_extractor.getObjectPropertyAnchors().containsKey(direction.source()))
+				return mapping_extractor.getConfidence4ObjectPropertyAnchor(direction.source(), direction.target());
+			return mapping_extractor.getConfidence4ObjectPropertyAnchor(direction.target(), direction.source());
+		}
+
 		return mapping_extractor.getConfidence4Mapping(mapping_clause.getLeftHS1(), mapping_clause.getRightHS());
 	}
 	

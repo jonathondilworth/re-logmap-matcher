@@ -515,7 +515,7 @@ public class LogMap2_Matcher {
 								logmap2.getIRI4DataPropIdentifier(ide1),
 								logmap2.getIRI4DataPropIdentifier(logmap2.getDataPropMappings().get(ide1)),
 								conf,
-								Utilities.EQ,  
+								logmap2.getDirection4DataPropMapping(ide1),  
 								Utilities.DATAPROPERTIES);
 					
 					//Same confidence so far
@@ -540,7 +540,7 @@ public class LogMap2_Matcher {
 								logmap2.getIRI4ObjectPropIdentifier(ide1),
 								logmap2.getIRI4ObjectPropIdentifier(logmap2.getObjectPropMappings().get(ide1)),
 								conf,
-								Utilities.EQ,
+								logmap2.getDirection4ObjectPropMapping(ide1),
 								Utilities.OBJECTPROPERTIES);
 					
 					//Same confidence so far

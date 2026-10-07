@@ -42,9 +42,6 @@ import uk.ac.ox.krr.logmap2.interactive.*;
 import uk.ac.ox.krr.logmap2.interactive.objects.MappingObjectInteractivity;
 import uk.ac.ox.krr.logmap2.mappings.MappingManager;
 import uk.ac.ox.krr.logmap2.mappings.CandidateMappingManager;
-
-import uk.ac.ox.krr.logmap2.io.LogOutput;
-
 import uk.ac.ox.krr.logmap2.statistics.*;
 
 
@@ -692,22 +689,28 @@ public class LogMap2Core {
 					//System.out.println(dir_mapping);
 								
 					//TODO No need to reverse ids. Done in OWLAlignmentFormat
-					//if (dir_mapping!=Utilities.R2L){
+					// if (dir_mapping!=Utilities.R2L){
+
+					// getDirMapping reports R2L relative to the smaller-id-first order and the writer's R2L branch reverses its arguments
+					// the ids are swapped here as saveExtractedMappings does for the files
+					
+					if (dir_mapping!=Utilities.R2L){
 						owlformat.addClassMapping2Output(
-								getIRI4ConceptIdentifier(ide1),
-								getIRI4ConceptIdentifier(ide2),
-								dir_mapping,
-								getConfidence4ConceptMapping(ide1, ide2)
-								);
-					/*}
-					else{
+							getIRI4ConceptIdentifier(ide1),
+							getIRI4ConceptIdentifier(ide2),
+							dir_mapping,
+							getConfidence4ConceptMapping(ide1, ide2)
+						);
+					} 
+					else 
+					{
 						owlformat.addClassMapping2Output(
-								getIRI4ConceptIdentifier(ide2),
-								getIRI4ConceptIdentifier(ide1),								
-								dir_mapping,
-								getConfidence4ConceptMapping(ide1, ide2)
-							);
-					}*/
+							getIRI4ConceptIdentifier(ide2),
+							getIRI4ConceptIdentifier(ide1),								
+							dir_mapping,
+							getConfidence4ConceptMapping(ide1, ide2)
+						);
+					}
 				}
 			}
 		}
@@ -724,7 +727,7 @@ public class LogMap2Core {
 			owlformat.addDataPropMapping2Output(
 					getIRI4DataPropIdentifier(ide1),
 					getIRI4DataPropIdentifier(getDataPropMappings().get(ide1)),
-					Utilities.EQ,  
+					mapping_extractor.getDataPropertyAnchorDirection(ide1),  
 					getConfidence4DataPropMapping(ide1, getDataPropMappings().get(ide1))//1.0
 				);
 		}
@@ -739,7 +742,7 @@ public class LogMap2Core {
 			owlformat.addObjPropMapping2Output(
 					getIRI4ObjectPropIdentifier(ide1),
 					getIRI4ObjectPropIdentifier(getObjectPropMappings().get(ide1)),
-					Utilities.EQ, 
+					mapping_extractor.getObjectPropertyAnchorDirection(ide1), 
 					getConfidence4ObjectPropMapping(ide1, getObjectPropMappings().get(ide1))//1.0
 				);
 		}
@@ -1024,6 +1027,16 @@ public class LogMap2Core {
 		
 		LogOutput.printAlways("Time creating anchors (s): " + StatisticsTimeMappings.getRunningTime(init));
 		
+		// Property correspondences are discovered and admitted here, once, before the first repair
+		// round, so that the restriction rules see them during every round and no judgement after
+		// the repair can undo a repair decision. The admission's disjointness test reads the
+		// interval labelling index, which is therefore built on the raw class anchors first.
+		if (Parameters.perform_property_matching){
+			index.setIntervalLabellingIndex(mapping_extractor.getLogMapMappings());
+			index.clearAuxStructuresforLabellingSchema();
+			mapping_extractor.createObjectPropertyAnchors();
+			mapping_extractor.createDataPropertyAnchors();
+		}
 		
 		
 		
@@ -1232,7 +1245,9 @@ public class LogMap2Core {
 		interactiveProcessManager.endInteractiveProcess(mapping_extractor.isFilterWithHeuristicsSecondLevelMappings()); //adds mappings selected by user and logmap heuristics
 		/*else {
 			for (MappingObjectInteractivity mapping : mapping_extractor.getListOfMappingsToAskUser()){
-				
+				if (!mapping.isClassMapping()) // property entries, added at admission, are not class candidates
+					continue;
+			
 				mapping_extractor.addSubMapping2Mappings2Review(mapping.getIdentifierOnto1(), mapping.getIdentifierOnto2());
 				mapping_extractor.addSubMapping2Mappings2Review(mapping.getIdentifierOnto2(), mapping.getIdentifierOnto1());
 				
@@ -1278,6 +1293,8 @@ public class LogMap2Core {
 		//Adhoc method ask everything
 		//------------------------------------
 		for (MappingObjectInteractivity mapping : mapping_extractor.getListOfMappingsToAskUser()){
+			if (!mapping.isClassMapping()) //property entries, added at admission, are not class candidates
+				continue;
 					
 			if (OracleManager.isMappingValid(
 					index.getIRIStr4ConceptIndex(mapping.getIdentifierOnto1()),
@@ -1316,7 +1333,8 @@ public class LogMap2Core {
 	private void performAutomaticDecisions(){
 					
 		for (MappingObjectInteractivity mapping : mapping_extractor.getListOfMappingsToAskUser()){
-						
+			if (!mapping.isClassMapping()) // property entries, added at admission, are not class candidates
+				continue;
 			
 			//See createMappings2AskUser in mapping_extractor for more information about the use of this filter
 			if (!mapping_extractor.isFilterWithHeuristicsSecondLevelMappings() 
@@ -1601,11 +1619,12 @@ public class LogMap2Core {
 	
 	
 	/**
-	 * Discovery and assessment of DATA and OBJECT property mappings
+	 * Discovery and assessment of DATA and OBJECT property mappings <-- (see below for new behaviour)
+	 * Property mappings were discovered and assessed before the first repair round (createAndCleanAnchors)
 	 */
 	private void createAndAssessPropertyMappings(){
-		mapping_extractor.createObjectPropertyAnchors();
-		mapping_extractor.createDataPropertyAnchors();
+		// mapping_extractor.createObjectPropertyAnchors();
+		// mapping_extractor.createDataPropertyAnchors();
 		
 		
 		//Delete inverted files for properties
@@ -1807,7 +1826,7 @@ public class LogMap2Core {
 					outPutFilesManager.addDataPropMapping2Files(
 							getIRI4DataPropIdentifier(ide1),
 							getIRI4DataPropIdentifier(getDataPropMappings().get(ide1)),
-							Utilities.EQ,  
+							mapping_extractor.getDataPropertyAnchorDirection(ide1),  
 							getConfidence4DataPropMapping(ide1, getDataPropMappings().get(ide1))//1.0
 						);
 				}
@@ -1817,7 +1836,7 @@ public class LogMap2Core {
 					outPutFilesManager.addObjPropMapping2Files(
 							getIRI4ObjectPropIdentifier(ide1),
 							getIRI4ObjectPropIdentifier(getObjectPropMappings().get(ide1)),
-							Utilities.EQ, 
+							mapping_extractor.getObjectPropertyAnchorDirection(ide1), 
 							getConfidence4ObjectPropMapping(ide1, getObjectPropMappings().get(ide1))//1.0
 						);
 				}
@@ -2469,6 +2488,14 @@ public class LogMap2Core {
 	
 	public Map<Integer, Integer> getObjectPropMappings(){
 		return mapping_extractor.getObjectPropertyAnchors();	
+	}
+
+	public int getDirection4ObjectPropMapping(int ide1){
+		return mapping_extractor.getObjectPropertyAnchorDirection(ide1);
+	}
+
+	public int getDirection4DataPropMapping(int ide1){
+		return mapping_extractor.getDataPropertyAnchorDirection(ide1);
 	}
 	
 	public Map<Integer, Set<Integer>> getInstanceMappings(){

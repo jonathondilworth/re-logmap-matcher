@@ -2881,7 +2881,8 @@ public class OntologyProcessing {
 		fin = Calendar.getInstance().getTimeInMillis();
 		LogOutput.print("Extracting General Axioms: " + (float)((double)fin-(double)init)/1000.0);
 		
-		
+		// Restrictions for the repair, from HermiT's normalisation (the ontology is still loaded here)
+		index.getRestrictionStore().addOntology(id_onto, onto);
 
 		//Extract
 		if (Parameters.perform_instance_matching){			

@@ -134,6 +134,8 @@ public class InteractiveProcessAmbiguity extends InteractiveProcess {
 		//input: getListOfMappingsToAskUser
 		for (MappingObjectInteractivity mapping : mapping_manager.getListOfMappingsToAskUser()){
 			
+			if (!mapping.isClassMapping()) // property entries, added at admission, are not class candidates
+				continue;
 						
 			ambiguity = mapping_manager.getEntityAmbiguity_UserMappings(mapping.getIdentifierOnto1()) +
 					mapping_manager.getEntityAmbiguity_UserMappings(mapping.getIdentifierOnto2());
@@ -345,6 +347,10 @@ public class InteractiveProcessAmbiguity extends InteractiveProcess {
 				
 				//User with error
 				for (MappingObjectInteractivity mapping : mapping_manager.getListOfMappingsToAskUser()){
+					
+					if (!mapping.isClassMapping()) //property entries, added at admission, are not class candidates
+						continue;
+
 					if (isMappingGood(mapping)){
 						if (isUserFailing()){
 							mapping.setRemovedFlag(true); //Marking bad a good mappings
@@ -446,7 +452,10 @@ public class InteractiveProcessAmbiguity extends InteractiveProcess {
 		
 		//Check mappings in conflict
 		for (MappingObjectInteractivity mapping2check : mapping_manager.getListOfMappingsToAskUser()){
-					
+
+			if (!mapping2check.isClassMapping()) // property entries, added at admission, are not class candidates
+				continue;
+
 			if (mapping2check.equals(added_mapping))
 				continue;
 					
@@ -499,6 +508,9 @@ public class InteractiveProcessAmbiguity extends InteractiveProcess {
 			
 		//Check mappings in conflict
 		for (MappingObjectInteractivity mapping2check : mapping_manager.getListOfMappingsToAskUser()){
+			
+			if (!mapping2check.isClassMapping()) // property entries, added at admission, are not class candidates
+				continue;
 					
 			if (mapping2check.equals(del_mapping))
 				continue;
@@ -590,6 +602,9 @@ public class InteractiveProcessAmbiguity extends InteractiveProcess {
 		//We add mappings to order
 		for (MappingObjectInteractivity mapping : mapping_manager.getListOfMappingsToAskUser()){
 		
+			if (!mapping.isClassMapping()) // property entries, added at admission, are not class candidates
+				continue;
+
 			//For the GUI we should only order by impact			
 			if (mapping.isRemovedFlagActive() || mapping.isAddedFlagActive())				
 				continue;
@@ -613,6 +628,9 @@ public class InteractiveProcessAmbiguity extends InteractiveProcess {
 		//Add mappings with flag "toadd" and apply heuristics
 		//Set added mappings or (with scope and confidence>0.5)
 		for (MappingObjectInteractivity mapping : mapping_manager.getListOfMappingsToAskUser()){
+
+			if (!mapping.isClassMapping()) // property entries, added at admission, are not class candidates
+				continue;
 						
 			if (!filter || //In case we do not want to apply further filtering
 				mapping.isAddedFlagActive() //User 
@@ -718,6 +736,9 @@ public class InteractiveProcessAmbiguity extends InteractiveProcess {
 		//We add mappings from current interactivity status
 		for (MappingObjectInteractivity mapping : mapping_manager.getListOfMappingsToAskUser()){
 			
+			if (!mapping.isClassMapping()) // property entries, added at admission, are not class candidates
+				continue;
+
 			if (
 				mapping.isAddedFlagActive() //User 
 				|| (hasScopeAll(mapping) && hasGoodConfidence(mapping) && !mapping.isRemovedFlagActive()) //LogMap heuristics for not remove mappings
@@ -952,6 +973,9 @@ public class InteractiveProcessAmbiguity extends InteractiveProcess {
 		//Check mappings in conflict
 		for (MappingObjectInteractivity mapping_conf : mapping_manager.getListOfMappingsToAskUser()){
 			
+			if (!mapping_conf.isClassMapping()) // property entries, added at admission, are not class candidates
+				continue;
+
 			if (mapping_conf.equals(added_mapping))
 				continue;
 			

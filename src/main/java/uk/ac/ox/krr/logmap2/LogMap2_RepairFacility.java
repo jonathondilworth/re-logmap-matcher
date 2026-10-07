@@ -509,7 +509,20 @@ public class LogMap2_RepairFacility {
 	
 	
 	private void assessMappings(){
-		
+
+		// Assess Property mappings: using index. Before the class repair, so that the repair sees the
+		// admitted property mappings and nothing deletes one behind the repair's back afterwards. The
+		// assessment's disjointness test reads the interval labelling index, built here on the input
+		// class mappings first
+		if (mapping_manager.getDataPropertyAnchors().size() >0 || mapping_manager.getObjectPropertyAnchors().size() > 0) {
+			index.setIntervalLabellingIndex(mapping_manager.getLogMapMappings());
+			index.clearAuxStructuresforLabellingSchema();
+			init = Calendar.getInstance().getTimeInMillis();
+			mapping_manager.evaluateCompatibilityDataPropertyMappings();
+			mapping_manager.evaluateCompatibilityObjectPropertyMappings();
+			fin = Calendar.getInstance().getTimeInMillis();
+			LogOutput.print("\tTime assessing property mappings (s): " + (float)((double)fin-(double)init)/1000.0);		
+		}
 		
 		//CLASS MAPPINGS ASSESSESMENT
 		if (method_optimal)
@@ -519,17 +532,18 @@ public class LogMap2_RepairFacility {
 		
 		
 		
-		//Clean property mappings and individual mappings
+		//Clean ~~property mappings and~~ individual mappings
+		//Clean individual mappings
 		//--------------------------------
 		
-		//Assess Property mappings: using index
-		if (mapping_manager.getDataPropertyAnchors().size() >0 || mapping_manager.getObjectPropertyAnchors().size() > 0) {
-			init = Calendar.getInstance().getTimeInMillis();
-			mapping_manager.evaluateCompatibilityDataPropertyMappings();
-			mapping_manager.evaluateCompatibilityObjectPropertyMappings();
-			fin = Calendar.getInstance().getTimeInMillis();
-			LogOutput.print("\tTime assessing property mappings (s): " + (float)((double)fin-(double)init)/1000.0);		
-		}
+		// //Assess Property mappings: using index
+		// if (mapping_manager.getDataPropertyAnchors().size() >0 || mapping_manager.getObjectPropertyAnchors().size() > 0) {
+		// 	init = Calendar.getInstance().getTimeInMillis();
+		// 	mapping_manager.evaluateCompatibilityDataPropertyMappings();
+		// 	mapping_manager.evaluateCompatibilityObjectPropertyMappings();
+		// 	fin = Calendar.getInstance().getTimeInMillis();
+		// 	LogOutput.print("\tTime assessing property mappings (s): " + (float)((double)fin-(double)init)/1000.0);		
+		// }
 		
 		
 		
@@ -579,6 +593,11 @@ public class LogMap2_RepairFacility {
 		
 		
 		init = Calendar.getInstance().getTimeInMillis();
+		// Global conflictiveness, as on the matcher path: equal-size plans are ordered by how many
+		// unsatisfiable classes each direction is blamed for before the confidence tie-break
+		if (Parameters.extractGlobal_D_G_Info){
+			mapping_assessment.CountSatisfiabilityOfIntegration_DandG(mapping_manager.getLogMapMappings());
+		}
 		mapping_assessment.CheckSatisfiabilityOfIntegration_DandG(mapping_manager.getLogMapMappings());
 		fin = Calendar.getInstance().getTimeInMillis();
 		LogOutput.print("\tTime cleaning reliable class mappings Dowling and Gallier (s): " + (float)((double)fin-(double)init)/1000.0);
@@ -707,6 +726,9 @@ public class LogMap2_RepairFacility {
 					
 					
 		init = Calendar.getInstance().getTimeInMillis();
+		if (Parameters.extractGlobal_D_G_Info){
+			mapping_assessment.CountSatisfiabilityOfIntegration_DandG(mapping_manager.getLogMapMappings());
+		}
 		mapping_assessment.CheckSatisfiabilityOfIntegration_DandG(mapping_manager.getLogMapMappings());
 		fin = Calendar.getInstance().getTimeInMillis();
 		LogOutput.print("\tTime cleaning class mappings Dowling and Gallier (s): " + (float)((double)fin-(double)init)/1000.0);
@@ -942,6 +964,7 @@ public class LogMap2_RepairFacility {
 		//So far only equivalences are considered
 		//if (map.getMappingDirection()==Utilities.EQ){
 			mapping_manager.addObjectPropertyAnchor(ide1, ide2);
+			mapping_manager.setObjectPropertyAnchorDirection(ide1, map.getMappingDirection()); //a cell read as < or > stays directed
 			mapping_manager.addObjectPropertyAnchorConfidence(ide1, map.getConfidence());
 		//}		
 	}
@@ -973,6 +996,7 @@ public class LogMap2_RepairFacility {
 		//So far only equivalences are considered
 		//if (map.getMappingDirection()==Utilities.EQ){
 			mapping_manager.addDataPropertyAnchor(ide1, ide2);
+			mapping_manager.setDataPropertyAnchorDirection(ide1, map.getMappingDirection()); //a cell read as < or > stays directed
 			mapping_manager.addDataPropertyAnchorConfidence(ide1, map.getConfidence());
 		//}		
 		
@@ -1096,7 +1120,7 @@ public class LogMap2_RepairFacility {
 				outPutFilesManager.addDataPropMapping2Files(
 							index.getIRIStr4DataPropIndex(ide1),
 							index.getIRIStr4DataPropIndex(mapping_manager.getDataPropertyAnchors().get(ide1)),
-							Utilities.EQ,  
+							mapping_manager.getDataPropertyAnchorDirection(ide1),  
 							mapping_manager.getConfidence4DataPropertyAnchor(ide1, mapping_manager.getDataPropertyAnchors().get(ide1))//1.0
 						);
 			}
@@ -1109,7 +1133,7 @@ public class LogMap2_RepairFacility {
 				outPutFilesManager.addObjPropMapping2Files(
 							index.getIRIStr4ObjPropIndex(ide1),
 							index.getIRIStr4ObjPropIndex(mapping_manager.getObjectPropertyAnchors().get(ide1)),
-							Utilities.EQ, 
+							mapping_manager.getObjectPropertyAnchorDirection(ide1), 
 							mapping_manager.getConfidence4ObjectPropertyAnchor(ide1, mapping_manager.getObjectPropertyAnchors().get(ide1))//1.0
 						);
 			}
@@ -1173,7 +1197,20 @@ public class LogMap2_RepairFacility {
 	public Set<MappingObjectStr> getInputMappings(){
 		return input_mappings;
 	}
+
+	/**
+	 * Returns the IRIs of the classes found unsatisfiable without any correspondence to blame (not repaired)
+	 * @return
+	 */
+	public Set<String> getPreexistingIncoherence(){
+		Set<String> iris = new HashSet<String>();
+		for (int ide : mapping_assessment.getPreexistingIncoherence()){
+			iris.add(index.getIRIStr4ConceptIndex(ide));
+		}
+		return iris;
+	}
 	
+
 	/**
 	 * Returns the real size of the repair: number of removed clauses
 	 * @return
@@ -1372,10 +1409,10 @@ public class LogMap2_RepairFacility {
 				
 				clean_mappings.add(
 						new MappingObjectStr(
-								index.getIRIStr4ConceptIndex(ide1), 
+								index.getIRIStr4DataPropIndex(ide1), // a data property identifier, not a class one 
 								index.getIRIStr4DataPropIndex(mapping_manager.getDataPropertyAnchors().get(ide1)), 
 								mapping_manager.getConfidence4DataPropertyAnchor(ide1, mapping_manager.getDataPropertyAnchors().get(ide1)), 
-								Utilities.EQ,
+								mapping_manager.getDataPropertyAnchorDirection(ide1),
 								Utilities.DATAPROPERTIES));
 				
 				
@@ -1391,7 +1428,7 @@ public class LogMap2_RepairFacility {
 								index.getIRIStr4ObjPropIndex(ide1),
 								index.getIRIStr4ObjPropIndex(mapping_manager.getObjectPropertyAnchors().get(ide1)),								 
 								mapping_manager.getConfidence4ObjectPropertyAnchor(ide1, mapping_manager.getObjectPropertyAnchors().get(ide1)),
-								Utilities.EQ,
+								mapping_manager.getObjectPropertyAnchorDirection(ide1),
 								Utilities.OBJECTPROPERTIES));
 			}
 			//}

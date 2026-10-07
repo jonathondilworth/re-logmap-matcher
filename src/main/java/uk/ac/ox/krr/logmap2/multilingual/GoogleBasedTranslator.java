@@ -95,7 +95,7 @@ public class GoogleBasedTranslator extends Translator{
 			// Set Google key here
 			
 			//GoogleAPI.setHttpReferrer("https://code.google.com/p/logmap-matcher/");
-			//GoogleAPI.setKey("AIzaSyCOXm6fqYcqJtpFSrlMsgAy1VPkgNcrD2k"); //New key
+			//GoogleAPI.setKey(""); //New key
 			
 			
 			//Language originLang = LanguageMap.get(originLangStr);

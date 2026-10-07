@@ -33,6 +33,8 @@ import uk.ac.ox.krr.logmap2.utilities.Lib;
 import uk.ac.ox.krr.logmap2.utilities.Pair;
 import uk.ac.ox.krr.logmap2.utilities.Utilities;
 
+import uk.ac.ox.krr.logmap2.repair.restrictions.RestrictionStore;
+
 public abstract class IndexManager {
 	
 	/**To get the frequency and co-occurrence */
@@ -300,6 +302,8 @@ public abstract class IndexManager {
 	/* *A^B->C axiom*/
 	protected Map<Set<Integer>, Integer> generalHornAxioms= new HashMap<Set<Integer>, Integer>();
 	
+	private RestrictionStore restrictionStore;
+
 	public Set<Integer> dangerousClasses = new HashSet<Integer>();//equivalnet to TOP
 	
 	
@@ -551,7 +555,20 @@ public abstract class IndexManager {
 	}
 	
 	
+	/**
+	 * The restrictions of the ontology pair, filled by OntologyProcessing.setTaxonomicData
+	 * and read by the repair; created on first use, above every identifier allocated so far
+	 */
+	public RestrictionStore getRestrictionStore(){
+		if (restrictionStore==null)
+			restrictionStore = RestrictionStore.above(this);
+		return restrictionStore;
+	}
 	
+	
+	public int getLargestAllocatedIdentifier(){
+		return Math.max(class_indiv_ident, Math.max(dprop_ident, oprop_ident)) - 1;
+	}
 	
 	
 	

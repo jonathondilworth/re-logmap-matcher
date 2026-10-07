@@ -49,6 +49,8 @@ public class DowlingGallierHornSAT {
 	
 	//Propositions to 'parents'(targets) 
 	private Map<Integer, Set<Link>> FS = new HashMap<Integer, Set<Link>>();
+	//The mapping clause of each correspondence direction (class or property), to resolve restriction supports
+	private Map<CorrespondenceDirection, HornClause> mappingClauseOfDirection = new HashMap<CorrespondenceDirection, HornClause>();
 	//Links to ignore
 	private Map<Integer, Set<Link>> additionalIgnoreFS = new HashMap<Integer, Set<Link>>();
 	private Map<Integer, Set<Link>> generalIgnoreFS = new HashMap<Integer, Set<Link>>();
@@ -70,6 +72,11 @@ public class DowlingGallierHornSAT {
 	private int clause_num=0;
 	
 	private int last_onto1_id;	
+	
+
+	//The restriction store's TOP proposition, seeded into every propagation so that what is
+	//attached to TOP (ranges, functionality) holds for every class; -1 when there is none
+	private int top = -1;
 	
 	
 	//private IndexManager index;
@@ -200,6 +207,40 @@ public class DowlingGallierHornSAT {
 			Map<Integer, Set<Integer>> fixedmappings,
 			Map<Integer, Set<Integer>> mappings,
 			Set<HornClause> mappings2ignore){		
+
+		this(taxonomy, 
+			equivalences, 
+			disjointness, 
+			generalHornAxioms, 
+			addClassTypes, 
+			indivClassTypes,
+			fixedmappings, mappings, mappings2ignore, Collections.<HornInclusion>emptyList(),
+			Collections.<CorrespondenceDirection>emptyList(), -1);
+		
+	}
+	
+	
+	/**
+	 * As above, plus the restriction clauses of this build (attachments, definitions, clash
+	 * seeds and derived links), whose supports are resolved against the mapping clauses
+	 * @param restrictionClauses clauses over class, fresh-class and restriction propositions
+	 * @param propertyDirections the surviving directions of the property correspondences under repair
+	 * @param top the TOP proposition of those clauses, or -1
+	 */
+	public DowlingGallierHornSAT(
+			Map<Integer, Set<Integer>> taxonomy,
+			Map<Integer, Set<Integer>> equivalences,
+			Map<Integer, Set<Integer>> disjointness,
+			Map<Set<Integer>, Integer> generalHornAxioms,
+			boolean addClassTypes,
+			Map<Integer, Set<Integer>> indivClassTypes,
+			Map<Integer, Set<Integer>> fixedmappings,
+			Map<Integer, Set<Integer>> mappings,
+			Set<HornClause> mappings2ignore,
+			Collection<HornInclusion> restrictionClauses, 
+			Collection<CorrespondenceDirection> propertyDirections,
+			int top){
+		
 		
 		
 		//Currently used to know to which ontology belongs and identifier (the order)
@@ -235,7 +276,11 @@ public class DowlingGallierHornSAT {
 		
 		//Fixed mappings
 		addMappingClauses1N(fixedmappings,mappings2ignore, true);
-		
+
+		addPropertyDirectionClauses(propertyDirections);
+
+		addRestrictionClauses(restrictionClauses);
+
 		
 		N.add(0);//We add the space for T->P
 		
@@ -663,6 +708,7 @@ public class DowlingGallierHornSAT {
 				
 									
 					clauses.put(clause_num, clause);
+					mappingClauseOfDirection.put(CorrespondenceDirection.ofClasses(origin, target), clause);
 					//clauses.get(clause_num).setLabelPair(clause_num+1); //nOT USED ANYMORE
 					
 					FS.get(origin).add(new Link(clause_num, target));
@@ -679,7 +725,61 @@ public class DowlingGallierHornSAT {
 		LogOutput.print("D&G mapping links: " + num + "  " + mappings2ignore.size());
 	
 	}
+
+	/**
+	 * One clause per surviving property direction, with no arc: it is there to be masked by a
+	 * plan and named by the supports of the restriction clauses that depend on it
+	 */
+	private void addPropertyDirectionClauses(Collection<CorrespondenceDirection> propertyDirections){
+		
+		for (CorrespondenceDirection direction : propertyDirections){
+			PropertyDirectionClause clause = new PropertyDirectionClause(direction.kind(), direction.origin(), direction.target(), clause_num);
+			clauses.put(clause_num, clause);
+			mappingClauseOfDirection.put(direction, clause);
+			N.add(1);
+			clause_num++;
+		}
+		
+		LogOutput.print("D&G property direction clause num: " + clause_num);
+		
+	}
 	
+
+
+	
+	/**
+	 * Restriction clauses: one arc per body atom, and the support resolved to this build's
+	 * mapping and property direction clauses so that masking a correspondence disables what it supports
+	 */
+	private void addRestrictionClauses(Collection<HornInclusion> restrictionClauses){
+		
+		for (HornInclusion inclusion : restrictionClauses){
+			
+			Set<HornClause> support = new LinkedHashSet<HornClause>();
+			for (CorrespondenceDirection direction : inclusion.support().directions()){
+				HornClause mappingClause = mappingClauseOfDirection.get(direction);
+				if (mappingClause == null){
+					throw new IllegalStateException("restriction clause " + inclusion + " is supported by the correspondence direction "
+							+ direction + ", which is not a mapping clause of this build");
+				}
+				support.add(mappingClause);
+			}
+			
+			clauses.put(clause_num, new RestrictionHornClause(inclusion, clause_num, support));
+			
+			for (int atom : inclusion.body()){
+				if (!FS.containsKey(atom)){
+					FS.put(atom, new HashSet<Link>());
+				}
+				FS.get(atom).add(new Link(clause_num, inclusion.head()));
+			}
+			N.add(inclusion.body().size());
+			clause_num++;
+		}
+		
+		LogOutput.print("D&G restriction clause num: " + clause_num);
+		
+	}
 	
 	
 	
@@ -722,7 +822,14 @@ public class DowlingGallierHornSAT {
 							continue;
 						}
 					}
-					
+
+
+					//A restriction clause is ignored while a correspondence it depends on is ignored
+					if (clauses.get(link.getLabelLink()) instanceof RestrictionHornClause supported
+							&& supported.isMaskedBy(generalIgnoreFS, additionalIgnoreFS)){
+						continue;
+					}
+
 					
 					//TODO: Analyze for LogMap2 (*)
 					//MUST BE COMMENTED
@@ -742,6 +849,7 @@ public class DowlingGallierHornSAT {
 						
 						if (link.getTargetLink()==FALSE){
 							disjointness_involved_in_error.add(clauses.get(link.getLabelLink()));
+							blameSupportOf(link);
 							satisfiable=false;
 							//return visitied_clauses;	do not return!!
 						}
@@ -752,6 +860,7 @@ public class DowlingGallierHornSAT {
 							
 							//Only mappings
 							//TODO put it back if necessaru (*)
+							blameSupportOf(link);
 							if (clauses.get(link.getLabelLink()).getOrigin()==HornClause.MAP){
 								mappings_involved_in_error.add(clauses.get(link.getLabelLink()));
 								
@@ -782,7 +891,18 @@ public class DowlingGallierHornSAT {
 		
 	}
 	
+
+	/**
+	 * A restriction clause that fires blames the correspondences it depends on
+	 */
+	private void blameSupportOf(Link link){
+		if (clauses.get(link.getLabelLink()) instanceof RestrictionHornClause supported){
+			mappings_involved_in_error.addAll(supported.blamedSupport());
+		}
+	}
 	
+	
+
 	
 	public static void main(String[] args) {
 		
