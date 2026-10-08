@@ -384,6 +384,16 @@ public class LogMap2_RepairFacility {
 			
 			//System.out.println(map + "   " + map.getConfidence());
 			
+			//A cell flagged with "?" (in OAEI reference alignments: not to be counted) is left out of
+			//the repair and of its result, whatever its type. Stock read a flagged class cell as ">"
+			//and a flagged property cell as "=". Carrying flagged cells through to the output is a
+			//possible later change (docs/DECISIONS.md, 2 October 2026, review finding F-007)
+			if (map.getMappingDirection()==Utilities.Flagged) {
+				num_flagged_mappings++;
+				continue;
+			}
+			
+
 			if (map.getTypeOfMapping()==Utilities.CLASSES) {
 				
 				addClassMapping(map);
@@ -418,6 +428,8 @@ public class LogMap2_RepairFacility {
 		
 		LogOutput.print("Numb of reliable mappings: " + num_anchors);
 		LogOutput.print("Numb of other mappings: " + num_mappings2review);
+		if (num_flagged_mappings>0)
+			LogOutput.printAlways("Flagged mappings ('?') left out of the repair: " + num_flagged_mappings);
 		
 		
 		
@@ -513,13 +525,16 @@ public class LogMap2_RepairFacility {
 		// Assess Property mappings: using index. Before the class repair, so that the repair sees the
 		// admitted property mappings and nothing deletes one behind the repair's back afterwards. The
 		// assessment's disjointness test reads the interval labelling index, built here on the input
-		// class mappings first
+		//class mappings first. Building it records the cycles those mappings close as class
+		//equivalences; they are taken back afterwards, or the repair could not mask them
 		if (mapping_manager.getDataPropertyAnchors().size() >0 || mapping_manager.getObjectPropertyAnchors().size() > 0) {
+			Map<Integer, Set<Integer>> equivalences_before_admission = index.copyEquivalentClasses();
 			index.setIntervalLabellingIndex(mapping_manager.getLogMapMappings());
 			index.clearAuxStructuresforLabellingSchema();
 			init = Calendar.getInstance().getTimeInMillis();
 			mapping_manager.evaluateCompatibilityDataPropertyMappings();
 			mapping_manager.evaluateCompatibilityObjectPropertyMappings();
+			index.restoreEquivalentClasses(equivalences_before_admission);
 			fin = Calendar.getInstance().getTimeInMillis();
 			LogOutput.print("\tTime assessing property mappings (s): " + (float)((double)fin-(double)init)/1000.0);		
 		}
@@ -647,9 +662,15 @@ public class LogMap2_RepairFacility {
 		if (mapping_manager.getMappings2Review().size()>0){
 		
 			mapping_manager.setExactAsFixed(false);//repair all, just in case...
+			//The reliable mappings stay fixed, as in LogMap2Core's candidate rounds: the second check
+			//then sees them, as facts, beside the mappings under review. Without them a restriction
+			//conflict that needs a mapping of each group was never found
 			
 			//Clean D&G mappings 2 review
 			init = Calendar.getInstance().getTimeInMillis();
+			if (Parameters.extractGlobal_D_G_Info){
+				mapping_assessment.CountSatisfiabilityOfIntegration_DandG(mapping_manager.getMappings2Review());
+			}
 			mapping_assessment.CheckSatisfiabilityOfIntegration_DandG(mapping_manager.getMappings2Review());  //With Fixed mappings!
 			fin = Calendar.getInstance().getTimeInMillis();
 			LogOutput.print("Time cleaning rest of the mappings using D&G (s): " + (float)((double)fin-(double)init)/1000.0);
@@ -771,6 +792,7 @@ public class LogMap2_RepairFacility {
 	
 	int num_anchors=0;
 	int num_mappings2review=0;
+	int num_flagged_mappings=0;
 	
 	
 	/**

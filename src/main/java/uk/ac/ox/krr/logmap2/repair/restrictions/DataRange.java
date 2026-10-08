@@ -19,12 +19,14 @@ import org.semanticweb.owlapi.model.OWLLiteral;
  */
 public record DataRange(String datatype, boolean isFacetRestriction, String literal, String rendering) {
 
-    public static final String LITERAL = "http://www.w3.org/2000/01/rdf-schema#Literal";
+    public static final String TOP_DATATYPE = "http://www.w3.org/2000/01/rdf-schema#Literal";
 
+    
     public static DataRange of(OWLDatatype datatype) {
         String iri = datatype.getIRI().toString();
         return new DataRange(iri, false, null, shorten(iri));
     }
+
 
     public static DataRange of(OWLDatatypeRestriction restriction) {
         String base = restriction.getDatatype().getIRI().toString();
@@ -32,23 +34,32 @@ public record DataRange(String datatype, boolean isFacetRestriction, String lite
         for (OWLFacetRestriction facet : restriction.getFacetRestrictions()) {
             facets.add(facet.getFacet().getShortForm() + " " + facet.getFacetValue().getLiteral());
         }
-        return new DataRange(base, true, null, shorten(base) + "[" + String.join(", ", facets) + "]");
+        String rendering = shorten(base) + "[" + String.join(", ", facets) + "]";
+        return new DataRange(base, true, null, rendering);
     }
+
 
     public static DataRange of(OWLLiteral literal) {
         String datatype = literal.getDatatype().getIRI().toString();
         String tag = literal.hasLang() ? "@" + literal.getLang() : "^^" + shorten(datatype);
-        return new DataRange(datatype, false, literal.getLiteral(), "{\"" + literal.getLiteral() + "\"" + tag + "}");
+        String rendering = "{\"" + literal.getLiteral() + "\"" + tag + "}";
+        return new DataRange(datatype, false, literal.getLiteral(), rendering);
     }
+
 
     public boolean isSingleton() {
         return literal != null;
     }
 
-    /** `rdfs:Literal`, the data top. */
-    public boolean isLiteral() {
-        return datatype.equals(LITERAL) && !isFacetRestriction && !isSingleton();
+
+    /**
+     * `rdfs:Literal`, the datatype every data value belongs to; not to be confused with
+     * {@link #literal()}, a single value.
+     */
+    public boolean isTopDatatype() {
+        return datatype.equals(TOP_DATATYPE) && !isFacetRestriction && !isSingleton();
     }
+
 
     private static String shorten(String iri) {
         return iri.replace("http://www.w3.org/2001/XMLSchema#", "xsd:")

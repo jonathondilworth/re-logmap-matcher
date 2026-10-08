@@ -526,58 +526,77 @@ public class AnchorAssessment {
 		//---------------------------------------
 		LogOutput.print("\n\nALL ONTOLOGY");
 		LogOutput.print("-------------------------");
-		init1 = Calendar.getInstance().getTimeInMillis();
-		useProjection=false;
-		dealWithHardCases=false;
-		
-		setDowlingAndGallier(useProjection, mappings2repair);
-		
-		
-		//LogOutput.print("Repairing from Roots: " + index.getRootIdentifiers().size());
-		CheckSatisfiabilityOfIntegration_DandG(index.getRootIdentifiers());
-		
-		SAT.addAll(SATvisited);
-			
-		LogOutput.print("UNSAT found: " + unSATvisited.size());
-		//LogOutput.print("SAT found: " + SATvisited.size());
-		
-		unSATvisited.clear(); //we need to clear structure
-		SATvisited.clear();
-		
-		LogOutput.print("Remaining hard cases all onto (1 Iter): " + hard_cases_still2solve);
-		
-		
-		fin1 = Calendar.getInstance().getTimeInMillis();
-		LogOutput.print("\tTime ckecking satisfiability with D&G (Big projection, simple cases) (s): " + (float)((double)fin1-(double)init1)/1000.0);
 
 		
-		
-		//HARD CASES
-		//---------
-		if (hard_cases_still2solve>0){
+		//Every class is tested here, also those repaired on the small projection: a plan accepted
+		//there need not hold on the whole ontology. And the stage is repeated, on a theory built
+		//again from what is left, for as long as it removes something: a plan that masked the
+		//supports a restriction clause was given need not have broken every way that clause holds
+		int num_removed_before;
+		List<CorrespondenceDirection> property_directions_before;
+		do {
 			
-			LogOutput.print("Solving hard cases...");
+			num_removed_before = hornMappings2Remove.size();
+			property_directions_before = survivingPropertyDirections();
 			
-			hard_cases_still2solve=0;//we reinit
+			SAT.clear();
+			unsatClasses2repaired.clear();
 			
-			dealWithHardCases=true;
-		
+
 			init1 = Calendar.getInstance().getTimeInMillis();
+			useProjection=false;
+			dealWithHardCases=false;
 			
+			setDowlingAndGallier(useProjection, mappings2repair);
+			
+			
+			//LogOutput.print("Repairing from Roots: " + index.getRootIdentifiers().size());
 			CheckSatisfiabilityOfIntegration_DandG(index.getRootIdentifiers());
 			
 			SAT.addAll(SATvisited);
 				
+			LogOutput.print("UNSAT found: " + unSATvisited.size());
+			//LogOutput.print("SAT found: " + SATvisited.size());
+			
 			unSATvisited.clear(); //we need to clear structure
 			SATvisited.clear();
-	
-			LogOutput.print("REMAINING HARD CASES for all onto (2 Iter): " + hard_cases_still2solve);
+			
+			LogOutput.print("Remaining hard cases all onto (1 Iter): " + hard_cases_still2solve);
+			
 			
 			fin1 = Calendar.getInstance().getTimeInMillis();
-			LogOutput.print("Time ckecking satisfiability with D&G (Big projection, hard cases) (s): " + (float)((double)fin1-(double)init1)/1000.0);
+			LogOutput.print("\tTime ckecking satisfiability with D&G (Big projection, simple cases) (s): " + (float)((double)fin1-(double)init1)/1000.0);
 
-		}		
+			
+			
+			//HARD CASES
+			//---------
+			if (hard_cases_still2solve>0){
+				
+				LogOutput.print("Solving hard cases...");
+				
+				hard_cases_still2solve=0;//we reinit
+				
+				dealWithHardCases=true;
+			
+				init1 = Calendar.getInstance().getTimeInMillis();
+				
+				CheckSatisfiabilityOfIntegration_DandG(index.getRootIdentifiers());
+				
+				SAT.addAll(SATvisited);
+					
+				unSATvisited.clear(); //we need to clear structure
+				SATvisited.clear();
 		
+				LogOutput.print("REMAINING HARD CASES for all onto (2 Iter): " + hard_cases_still2solve);
+				
+				fin1 = Calendar.getInstance().getTimeInMillis();
+				LogOutput.print("Time ckecking satisfiability with D&G (Big projection, hard cases) (s): " + (float)((double)fin1-(double)init1)/1000.0);
+
+			}		
+			
+		} while (hornMappings2Remove.size()!=num_removed_before || !property_directions_before.equals(survivingPropertyDirections()));
+
 		//--------------------------------
 		//REMOVE MAPPINGS FROM STRUCTURES
 		//---------------------------------
@@ -1062,6 +1081,10 @@ public class AnchorAssessment {
 				
 				LogOutput.print("Case with more erroneous mappings! " + entity + "  " + dgSat.getConflictiveMappings().size());
 				
+				//The given set is the one that grows below, so its size is taken first
+				int num_mappings2ignore = mappings2ignore.size();
+				
+
 				//We add new mappings in error
 				dgSat.incrementConflictiveMappingsWithNewInvolvedMappings();
 				
@@ -1069,7 +1092,7 @@ public class AnchorAssessment {
 				
 				//We check again				
 				//Review this stop condition....
-				if (dgSat.getConflictiveMappings().size()!=mappings2ignore.size() && dgSat.getConflictiveMappings().size()>0){
+				if (dgSat.getConflictiveMappings().size()!=num_mappings2ignore && dgSat.getConflictiveMappings().size()>0){
 					completeSetOfConflictiveMappings(entity, dgSat.getConflictiveMappings());
 				}
 				else{

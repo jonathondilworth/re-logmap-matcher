@@ -12,6 +12,7 @@ import uk.ac.ox.krr.logmap2.repair.hornSAT.Support;
  * it is its own R′-successor); HS2, `hasSelf(R) ∧ ≥n P.Z → Z` (n ≥ 1) when R and P lie
  * below one functional property (the self-edge and the Z-successor are one individual).
  * Neither is a clash: the head is a class, and whatever excludes it closes the conflict.
+* Each membership is emitted once for every minimal support ({@link AlternativeSupports}).
  * A TOP head says nothing and is skipped. A self-edge holds in both orientations, so the
  * self-edge's property is tried both ways (§7.3a). Irreflexivity needs no rule:
  * `Irreflexive(R)` is the clause `hasSelf(R) → FALSE`, and self-edges link along the
@@ -41,22 +42,32 @@ final class SelfRules {
                 if (store.isTop(other.filler())) {
                     continue;
                 }
-                int selfEdge = self.propertyToken();
-                Support support = null;
-                if (other.isUniversal()) {
-                    support = Support.least(properties.supportOf(selfEdge, other.propertyToken()),
-                            properties.supportOf(SignedProperties.flip(selfEdge), other.propertyToken()));
-                } else if (other.isExistential()) {
-                    support = Support.least(functionality.mergeSupportOf(selfEdge, other.propertyToken()),
-                            functionality.mergeSupportOf(SignedProperties.flip(selfEdge), other.propertyToken()));
-                }
-                if (support != null) {
-                    memberships.add(HornInclusion.of(
-                            List.of(store.identifierOf(self), store.identifierOf(other)), other.filler(), support));
+                List<Integer> body = List.of(store.identifierOf(self), store.identifierOf(other));
+                for (Support support : membershipSupports(self.propertyToken(), other).supports()) {
+                    memberships.add(HornInclusion.of(body, other.filler(), support));
                 }
             }
         }
 
         return memberships;
     }
+
+
+    /**
+     * HS1 against a universal, HS2 against an existential, each with the self-edge in both
+     * orientations.
+     */
+    private AlternativeSupports membershipSupports(int selfEdge, Restriction other) {
+        int flippedSelfEdge = SignedProperties.flip(selfEdge);
+        if (other.isUniversal()) {
+            return properties.supportsOf(selfEdge, other.propertyToken())
+                    .or(properties.supportsOf(flippedSelfEdge, other.propertyToken()));
+        }
+        if (other.isExistential()) {
+            return functionality.mergeSupportsOf(selfEdge, other.propertyToken())
+                    .or(functionality.mergeSupportsOf(flippedSelfEdge, other.propertyToken()));
+        }
+        return AlternativeSupports.NONE;
+    }
+
 }

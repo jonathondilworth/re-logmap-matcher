@@ -33,6 +33,7 @@ import org.semanticweb.owlapi.model.OWLObjectMinCardinality;
 import org.semanticweb.owlapi.model.OWLObjectOneOf;
 import org.semanticweb.owlapi.model.OWLObjectPropertyExpression;
 import org.semanticweb.owlapi.model.OWLObjectSomeValuesFrom;
+import org.semanticweb.owlapi.util.OWLClassExpressionVisitorExAdapter;
 
 import uk.ac.ox.krr.logmap2.indexing.IndexManager;
 import uk.ac.ox.krr.logmap2.repair.hornSAT.HornInclusion;
@@ -46,17 +47,18 @@ import uk.ac.ox.krr.logmap2.utilities.Utilities;
  * (a union: a domain or range over a union, HermiT's definition of a union filler, a
  * plain `A ⊑ B ⊔ C`) become one union proposition above its members; a union with a
  * restriction among its heads is dropped. A clause over named classes only is left to
- * LogMap's index; everything else is dropped with a reason. Data restrictions are read the same way, with data ranges as
- * fillers and `rdfs:Literal` as their top. A hasValue arrives as an existential over a
- * nominal `{a}` (or a single literal) and is read as one; a hasSelf is a restriction of its
- * own with the companion `hasSelf(R) → ∃R.⊤`; reflexivity and irreflexivity are clauses on
- * that restriction; the types and the distinctness of the individuals under a hasValue
- * are clauses on their nominals. A restriction over an inverse (`∃R⁻.C`) is an incoming
- * restriction over R, an inclusion with an inverse side a fact between signed
- * properties, and a domain or range yields its twin read through the inverse (`∃R.⊤ ⊑ D`
- * is `⊤ ⊑ ∀R⁻.D`). Everything is read in the order of its rendering, operands too: the
- * normaliser's own order changes from run to run, and the store numbers propositions on
- * first sight. docs/normaliser-probes.md §3, design spec §3.1a, §3.5a, §4.2, §7.6, §7.8.
+ * LogMap's index; everything else is dropped with a reason. Data restrictions are read the
+ * same way, with data ranges as fillers and `rdfs:Literal` as their top. A hasValue arrives
+ * as an existential over a nominal `{a}` (or a single literal) and is read as one; a hasSelf
+ * is a restriction of its own with the companion `hasSelf(R) → ∃R.⊤`; reflexivity and
+ * irreflexivity are clauses on that restriction; the types and the distinctness of the
+ * individuals under a hasValue are clauses on their nominals. A restriction over an inverse
+ * (`∃R⁻.C`) is an incoming restriction over R, an inclusion with an inverse side a fact
+ * between signed properties, and a domain or range yields its twin read through the inverse
+ * (`∃R.⊤ ⊑ D` is `⊤ ⊑ ∀R⁻.D`). Everything is read in the order of its rendering, operands
+ * too: the normaliser's own order changes from run to run, and the store numbers
+ * propositions on first sight. docs/normaliser-probes.md §3, design spec §3.1a, §3.5a,
+ * §4.2, §7.6, §7.8.
  */
 final class NormalisedClauseReader {
 
@@ -65,6 +67,7 @@ final class NormalisedClauseReader {
     private final RestrictionStore store;
     private final IndexManager index;
     private final int ontologyNumber;
+    private final LiteralReader literalReader = new LiteralReader();
 
     NormalisedClauseReader(RestrictionStore store, IndexManager index, int ontologyNumber) {
         this.store = store;
@@ -83,10 +86,10 @@ final class NormalisedClauseReader {
             readDataPropertyInclusion(inclusion[0], inclusion[1]);
         }
         for (OWLObjectPropertyExpression property : sorted(normalised.getReflexiveObjectProperties())) {
-            readReflexivity(property, false);
+            readReflexive(property);
         }
         for (OWLObjectPropertyExpression property : sorted(normalised.getIrreflexiveObjectProperties())) {
-            readReflexivity(property, true);
+            readIrreflexive(property);
         }
         for (OWLIndividualAxiom fact : sorted(normalised.getFacts())) {
             readFact(fact);
@@ -233,14 +236,14 @@ final class NormalisedClauseReader {
         if (store.isRestriction(single) && head != HornInclusion.FALSE && !store.isRestriction(head)) {
             Restriction domain = store.restriction(single);
             if (domain.propertyKind() == PropertyKind.OBJECT && domain.kind() == RestrictionKind.SOME && store.isTop(domain.filler())) {
-                store.add(HornInclusion.of(List.of(store.top()),
-                        store.intern(Restriction.only(domain.property(), !domain.incoming(), head))));
+                Restriction twin = Restriction.only(domain.property(), !domain.incoming(), head);
+                store.add(HornInclusion.of(List.of(store.top()), store.intern(twin)));
             }
         } else if (store.isTop(single) && store.isRestriction(head)) {
             Restriction range = store.restriction(head);
             if (range.propertyKind() == PropertyKind.OBJECT && range.isUniversal()) {
-                store.add(HornInclusion.of(
-                        List.of(store.intern(Restriction.some(range.property(), !range.incoming(), store.top()))), range.filler()));
+                Restriction twin = Restriction.some(range.property(), !range.incoming(), store.top());
+                store.add(HornInclusion.of(List.of(store.intern(twin)), range.filler()));
             }
         }
     }
@@ -262,49 +265,92 @@ final class NormalisedClauseReader {
 
     /** A proposition the index does not know: a restriction, a fresh class or a nominal. */
     private boolean isOfTheStore(Literal literal) {
-        return store.isRestriction(literal.proposition()) || store.isFreshClass(literal.proposition())
+        return store.isRestriction(literal.proposition()) 
+                || store.isFreshClass(literal.proposition()) 
                 || store.isNominal(literal.proposition());
      }
 
 
     private Literal readLiteral(OWLClassExpression disjunct) {
-        if (disjunct instanceof OWLClass owlClass) {
+        return disjunct.accept(literalReader);
+    }
+    
+
+    /**
+     * The reading of each kind of class expression HermiT leaves as a disjunct of a clause.
+     * Any other kind is unreadable, and the clause is dropped with the reason.
+     */
+    private final class LiteralReader extends OWLClassExpressionVisitorExAdapter<Literal> {
+
+        LiteralReader() {
+            super(null);
+        }
+
+        @Override
+        protected Literal doDefault(OWLClassExpression expression) {
+            throw new Unreadable(reasonFor(expression));
+        }
+
+        @Override
+        public Literal visit(OWLClass owlClass) {
             return Literal.head(classProposition(owlClass));
         }
-        if (disjunct instanceof OWLObjectComplementOf complement) {
+
+        @Override
+        public Literal visit(OWLObjectComplementOf complement) {
             return readNegatedLiteral(complement.getOperand());
         }
-        if (disjunct instanceof OWLObjectSomeValuesFrom some) {
+
+        @Override
+        public Literal visit(OWLObjectSomeValuesFrom some) {
             return readExistential(some.getProperty(), 1, some.getFiller());
         }
-        if (disjunct instanceof OWLObjectMinCardinality atLeast) {
+
+        @Override
+        public Literal visit(OWLObjectMinCardinality atLeast) {
             return readExistential(atLeast.getProperty(), atLeast.getCardinality(), atLeast.getFiller());
         }
-        if (disjunct instanceof OWLObjectAllValuesFrom only) {
+
+        @Override
+        public Literal visit(OWLObjectAllValuesFrom only) {
             return readUniversal(only.getProperty(), only.getFiller());
         }
-        if (disjunct instanceof OWLObjectMaxCardinality atMost) {
+
+        @Override
+        public Literal visit(OWLObjectMaxCardinality atMost) {
             return readAtMost(atMost.getProperty(), atMost.getCardinality(), atMost.getFiller());
         }
-        if (disjunct instanceof OWLDataSomeValuesFrom some) {
+
+        @Override
+        public Literal visit(OWLDataSomeValuesFrom some) {
             return readDataExistential(some.getProperty(), 1, some.getFiller());
         }
-        if (disjunct instanceof OWLDataMinCardinality atLeast) {
+
+        @Override
+        public Literal visit(OWLDataMinCardinality atLeast) {
             return readDataExistential(atLeast.getProperty(), atLeast.getCardinality(), atLeast.getFiller());
         }
-        if (disjunct instanceof OWLDataAllValuesFrom only) {
+
+        @Override
+        public Literal visit(OWLDataAllValuesFrom only) {
             return readDataUniversal(only.getProperty(), only.getFiller());
         }
-        if (disjunct instanceof OWLDataMaxCardinality atMost) {
+
+        @Override
+        public Literal visit(OWLDataMaxCardinality atMost) {
             return readDataAtMost(atMost.getProperty(), atMost.getCardinality(), atMost.getFiller());
         }
-        if (disjunct instanceof OWLObjectHasSelf self) {
+
+        @Override
+        public Literal visit(OWLObjectHasSelf self) {
             return Literal.head(selfProposition(self.getProperty()));
         }
-        if (disjunct instanceof OWLObjectOneOf nominal) {
+
+        @Override
+        public Literal visit(OWLObjectOneOf nominal) {
             return Literal.head(nominalProposition(nominal));
         }
-        throw new Unreadable(reasonFor(disjunct));
+        
     }
 
 
@@ -326,9 +372,11 @@ final class NormalisedClauseReader {
     private int selfProposition(OWLObjectPropertyExpression property) {
         int propertyIdentifier = propertyIdentifier(property);
         int self = store.intern(Restriction.self(propertyIdentifier, store.top()));
-        store.add(HornInclusion.of(List.of(self), store.intern(Restriction.some(propertyIdentifier, store.top()))));
+        int successor = store.intern(Restriction.some(propertyIdentifier, store.top()));
+        store.add(HornInclusion.of(List.of(self), successor));
         return self;
     }
+
 
     /** `{a}`, a single named individual; several individuals are an enumeration, which is dropped. */
     private int nominalProposition(OWLObjectOneOf nominal) {
@@ -343,7 +391,6 @@ final class NormalisedClauseReader {
     }
 
 
-
     /** `∃R.C` and `≥n R.C`, whose dual (a `≤n-1`) is an atom only for n ≥ 2. */
     private Literal readExistential(OWLObjectPropertyExpression property, int cardinality, OWLClassExpression filler) {
         int propertyIdentifier = propertyIdentifier(property);
@@ -352,17 +399,19 @@ final class NormalisedClauseReader {
             if (cardinality != 1) {
                 throw new Unreadable(DroppedClause.Reason.COMPLEMENT_FILLER);
             }
-            return Literal.body(store.intern(Restriction.only(propertyIdentifier, incoming, fillerProposition(complement.getOperand()))));
+            int negatedFiller = fillerProposition(complement.getOperand());
+            return bodyAtom(Restriction.only(propertyIdentifier, incoming, negatedFiller));
         }
         
         int fillerIdentifier = fillerProposition(filler);
-        int proposition = store.intern(Restriction.atLeast(cardinality, propertyIdentifier, incoming, fillerIdentifier));
+        Restriction atLeast = Restriction.atLeast(cardinality, propertyIdentifier, incoming, fillerIdentifier);
         
         if (cardinality >= 2) {
-            return Literal.headWithDual(proposition, Restriction.atMost(cardinality - 1, propertyIdentifier, incoming, fillerIdentifier));
+            Restriction dual = Restriction.atMost(cardinality - 1, propertyIdentifier, incoming, fillerIdentifier);
+            return Literal.headWithDual(store.intern(atLeast), dual);
         }
         
-        return Literal.head(proposition);
+        return headAtom(atLeast);
     }
 
 
@@ -371,14 +420,16 @@ final class NormalisedClauseReader {
         int propertyIdentifier = propertyIdentifier(property);
         boolean incoming = property.isAnonymous();
         if (filler instanceof OWLObjectComplementOf complement) {
-            return Literal.body(store.intern(Restriction.some(propertyIdentifier, incoming, fillerProposition(complement.getOperand()))));
+            int negatedFiller = fillerProposition(complement.getOperand());
+            return bodyAtom(Restriction.some(propertyIdentifier, incoming, negatedFiller));
         }
         if (filler.isOWLNothing()) {
-            return Literal.body(store.intern(Restriction.some(propertyIdentifier, incoming, store.top())));
+            return bodyAtom(Restriction.some(propertyIdentifier, incoming, store.top()));
         }
-        return Literal.head(store.intern(Restriction.only(propertyIdentifier, incoming, fillerProposition(filler))));
+        return headAtom(Restriction.only(propertyIdentifier, incoming, fillerProposition(filler)));
     }
 
+    
     /** `≤n R.C`, whose dual is the body atom `≥n+1 R.C`. */
     private Literal readAtMost(OWLObjectPropertyExpression property, int cardinality, OWLClassExpression filler) {
         int propertyIdentifier = propertyIdentifier(property);
@@ -388,10 +439,11 @@ final class NormalisedClauseReader {
         }
         int fillerIdentifier = fillerProposition(filler);
         if (cardinality == 0) {
-            return Literal.body(store.intern(Restriction.some(propertyIdentifier, incoming, fillerIdentifier)));
+            return bodyAtom(Restriction.some(propertyIdentifier, incoming, fillerIdentifier));
         }
-        int proposition = store.intern(Restriction.atMost(cardinality, propertyIdentifier, incoming, fillerIdentifier));
-        return Literal.headWithDual(proposition, Restriction.atLeast(cardinality + 1, propertyIdentifier, incoming, fillerIdentifier));
+        Restriction atMost = Restriction.atMost(cardinality, propertyIdentifier, incoming, fillerIdentifier);
+        Restriction dual = Restriction.atLeast(cardinality + 1, propertyIdentifier, incoming, fillerIdentifier);
+        return Literal.headWithDual(store.intern(atMost), dual);
     }
 
 
@@ -403,23 +455,27 @@ final class NormalisedClauseReader {
             if (cardinality != 1) {
                 throw new Unreadable(DroppedClause.Reason.COMPLEMENT_FILLER);
             }
-            return Literal.body(store.intern(Restriction.only(PropertyKind.DATA, propertyIdentifier, dataRangeProposition(complement.getDataRange()))));
+            int negatedFiller = dataRangeProposition(complement.getDataRange());
+            return bodyAtom(Restriction.only(PropertyKind.DATA, propertyIdentifier, negatedFiller));
         }
         int fillerIdentifier = dataRangeProposition(filler);
-        int proposition = store.intern(Restriction.atLeast(PropertyKind.DATA, cardinality, propertyIdentifier, fillerIdentifier));
+        Restriction atLeast = Restriction.atLeast(PropertyKind.DATA, cardinality, propertyIdentifier, fillerIdentifier);
         if (cardinality >= 2) {
-            return Literal.headWithDual(proposition, Restriction.atMost(PropertyKind.DATA, cardinality - 1, propertyIdentifier, fillerIdentifier));
+            Restriction dual = Restriction.atMost(PropertyKind.DATA, cardinality - 1, propertyIdentifier, fillerIdentifier);
+            return Literal.headWithDual(store.intern(atLeast), dual);
         }
-        return Literal.head(proposition);
+        return headAtom(atLeast);
     }
 
 
     private Literal readDataUniversal(OWLDataPropertyExpression property, OWLDataRange filler) {
         int propertyIdentifier = dataPropertyIdentifier(property);
         if (filler instanceof OWLDataComplementOf complement) {
-            return Literal.body(store.intern(Restriction.some(PropertyKind.DATA, propertyIdentifier, dataRangeProposition(complement.getDataRange()))));
+            int negatedFiller = dataRangeProposition(complement.getDataRange());
+            return bodyAtom(Restriction.some(PropertyKind.DATA, propertyIdentifier, negatedFiller));
         }
-        return Literal.head(store.intern(Restriction.only(PropertyKind.DATA, propertyIdentifier, dataRangeProposition(filler))));
+        int fillerIdentifier = dataRangeProposition(filler);
+        return headAtom(Restriction.only(PropertyKind.DATA, propertyIdentifier, fillerIdentifier));
     }
 
 
@@ -430,10 +486,24 @@ final class NormalisedClauseReader {
         }
         int fillerIdentifier = dataRangeProposition(filler);
         if (cardinality == 0) {
-            return Literal.body(store.intern(Restriction.some(PropertyKind.DATA, propertyIdentifier, fillerIdentifier)));
+            Restriction some = Restriction.some(PropertyKind.DATA, propertyIdentifier, fillerIdentifier);
+            return bodyAtom(some);
         }
-        int proposition = store.intern(Restriction.atMost(PropertyKind.DATA, cardinality, propertyIdentifier, fillerIdentifier));
-        return Literal.headWithDual(proposition, Restriction.atLeast(PropertyKind.DATA, cardinality + 1, propertyIdentifier, fillerIdentifier));
+        Restriction atMost = Restriction.atMost(
+                PropertyKind.DATA, cardinality, propertyIdentifier, fillerIdentifier);
+        Restriction dual = Restriction.atLeast(
+                PropertyKind.DATA, cardinality + 1, propertyIdentifier, fillerIdentifier);
+        return Literal.headWithDual(store.intern(atMost), dual);
+    }
+
+
+    private Literal bodyAtom(Restriction restriction) {
+        return Literal.body(store.intern(restriction));
+    }
+
+
+    private Literal headAtom(Restriction restriction) {
+        return Literal.head(store.intern(restriction));
     }
 
 
@@ -458,6 +528,7 @@ final class NormalisedClauseReader {
         return false;
     }
 
+
     private static boolean isContradiction(OWLClassExpression disjunct) {
         if (disjunct.isOWLNothing()) {
             return true;
@@ -474,7 +545,9 @@ final class NormalisedClauseReader {
         return false;
     }
 
+
     // entities
+
 
     private int classProposition(OWLClass owlClass) {
         String iri = owlClass.getIRI().toString();
@@ -489,6 +562,7 @@ final class NormalisedClauseReader {
         }
         return index.getClassIdentifier4IRI(iri);
     }
+
 
     private int fillerProposition(OWLClassExpression filler) {
         if (filler instanceof OWLClass owlClass) {
@@ -533,6 +607,7 @@ final class NormalisedClauseReader {
         throw new Unreadable(DroppedClause.Reason.UNSUPPORTED_DATA_RANGE);
     }
 
+
     /** The identifier of the named property, of `R` and of `R⁻` alike. */
     private int propertyIdentifier(OWLObjectPropertyExpression property) {
         String iri = property.getNamedProperty().getIRI().toString();
@@ -541,6 +616,7 @@ final class NormalisedClauseReader {
         }
         return index.getObjectPropIdentifier4IRI(iri);
     }
+
 
     /** The signed property of an expression: `R` outgoing, `R⁻` incoming. */
     private int propertyToken(OWLObjectPropertyExpression property) {
@@ -562,6 +638,7 @@ final class NormalisedClauseReader {
 
     // property inclusions
 
+
     /** `R ⊑ S`, `R ⊑ S⁻` (an inverse pair or a symmetric property arrives so) as a fact between signed properties. */
     private void readPropertyInclusion(OWLObjectPropertyExpression subProperty, OWLObjectPropertyExpression superProperty) {
         try {
@@ -570,6 +647,7 @@ final class NormalisedClauseReader {
             store.drop(unreadable.reason, subProperty + " -> " + superProperty);
         }
     }
+
 
     private void readDataPropertyInclusion(OWLDataPropertyExpression subProperty, OWLDataPropertyExpression superProperty) {
         try {
@@ -580,21 +658,29 @@ final class NormalisedClauseReader {
         }
     }
 
+
     // property characteristics and facts
 
-    /** `Reflexive(R)` is `TOP → hasSelf(R)`, `Irreflexive(R)` is `hasSelf(R) → FALSE`. */
-    private void readReflexivity(OWLObjectPropertyExpression property, boolean irreflexive) {
+
+    /** `Reflexive(R)` is `TOP → hasSelf(R)`. */
+    private void readReflexive(OWLObjectPropertyExpression property) {
         try {
-            int self = selfProposition(property);
-            if (irreflexive) {
-                store.add(HornInclusion.of(List.of(self), HornInclusion.FALSE));
-            } else {
-                store.add(HornInclusion.of(List.of(store.top()), self));
-            }
+            store.add(HornInclusion.of(List.of(store.top()), selfProposition(property)));
         } catch (Unreadable unreadable) {
-            store.drop(unreadable.reason, (irreflexive ? "irreflexive " : "reflexive ") + property);
+            store.drop(unreadable.reason, "reflexive " + property);
         }
     }
+
+
+    /** `Irreflexive(R)` is `hasSelf(R) → FALSE`. */
+    private void readIrreflexive(OWLObjectPropertyExpression property) {
+        try {
+            store.add(HornInclusion.of(List.of(selfProposition(property)), HornInclusion.FALSE));
+        } catch (Unreadable unreadable) {
+            store.drop(unreadable.reason, "irreflexive " + property);
+        }
+    }
+
 
     /**
      * The one ABox reading, for the individuals some hasValue mentions: a named type is the
@@ -625,7 +711,8 @@ final class NormalisedClauseReader {
             if (nominals.size() >= 2) {
                 for (int first = 0; first < nominals.size(); first++) {
                     for (int second = first + 1; second < nominals.size(); second++) {
-                        store.add(HornInclusion.of(List.of(nominals.get(first), nominals.get(second)), HornInclusion.FALSE));
+                        List<Integer> pair = List.of(nominals.get(first), nominals.get(second));
+                        store.add(HornInclusion.of(pair, HornInclusion.FALSE));
                     }
                 }
                 return;
@@ -633,6 +720,7 @@ final class NormalisedClauseReader {
         }
         store.drop(DroppedClause.Reason.ASSERTION, describe(fact));
     }
+
 
     private Integer knownNominal(OWLIndividual individual) {
         if (individual.isAnonymous()) {
@@ -648,6 +736,7 @@ final class NormalisedClauseReader {
         }
     }
 
+
     private static String describe(Object axiom) {
         if (axiom instanceof Object[] parts) {
             List<String> rendered = new ArrayList<>();
@@ -659,14 +748,14 @@ final class NormalisedClauseReader {
         return axiom.toString();
     }
 
+
     /** Thrown while reading one literal; the clause is then dropped with this reason. */
     private static final class Unreadable extends RuntimeException {
-
         private final DroppedClause.Reason reason;
-
         Unreadable(DroppedClause.Reason reason) {
             super(reason.explanation());
             this.reason = reason;
         }
     }
+
 }

@@ -27,18 +27,6 @@ public final class RestrictionHornClause extends HornClause {
         this.support = Collections.unmodifiableSet(new LinkedHashSet<>(support));
     }
 
-    public List<Integer> body() {
-        return body;
-    }
-
-    public int head() {
-        return head;
-    }
-
-    public Set<HornClause> support() {
-        return support;
-    }
-
     /**
      * Whether a support clause is masked, read from the two mask maps the propagation
      * already consults: a mapping clause is masked by its link under its origin

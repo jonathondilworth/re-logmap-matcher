@@ -17,9 +17,11 @@ import java.util.TreeSet;
 import org.semanticweb.HermiT.structural.OWLAxiomsAdapted;
 import org.semanticweb.HermiT.structural.OWLNormalizationAdapted;
 import org.semanticweb.owlapi.apibinding.OWLManager;
+import org.semanticweb.owlapi.model.OWLAxiom;
 import org.semanticweb.owlapi.model.OWLOntology;
 
 import uk.ac.ox.krr.logmap2.indexing.IndexManager;
+import uk.ac.ox.krr.logmap2.io.LogOutput;
 import uk.ac.ox.krr.logmap2.repair.hornSAT.HornInclusion;
 
 /**
@@ -92,12 +94,68 @@ public final class RestrictionStore {
                     + " reserved its range at " + top + "; the store must be filled after both lexicons");
         }
 
-        OWLAxiomsAdapted normalised = new OWLAxiomsAdapted();
-        OWLNormalizationAdapted normaliser = new OWLNormalizationAdapted(OWLManager.getOWLDataFactory(), normalised, 0);
-        normaliser.processOntology(ontology);
-
-        new NormalisedClauseReader(this, index, ontologyNumber).read(normalised);
+        new NormalisedClauseReader(this, index, ontologyNumber).read(normalFormOf(ontology));
     }
+
+
+    /**
+     * HermiT's normal form of the ontology. The normaliser rejects some axioms by throwing (a
+     * SWRL rule with a built-in atom, an anonymous individual in a same-individual axiom and
+     * others). The ontology is then normalised without the axioms that are rejected when taken
+     * one by one, and each of those is reported as dropped. If what is left is rejected as
+     * well, nothing of the ontology is read. Either way the theory is weaker, never wrong.
+     */
+    private OWLAxiomsAdapted normalFormOf(OWLOntology ontology) {
+        try {
+            OWLAxiomsAdapted normalised = new OWLAxiomsAdapted();
+            normaliserInto(normalised).processOntology(ontology);
+            return normalised;
+        } catch (IllegalArgumentException rejection) {
+            return normalFormOfTheAcceptedAxioms(ontology);
+        }
+    }
+
+
+    private OWLAxiomsAdapted normalFormOfTheAcceptedAxioms(OWLOntology ontology) {
+        List<OWLAxiom> accepted = new ArrayList<>();
+        int rejected = 0;
+
+        for (OWLAxiom axiom : ontology.getLogicalAxioms()) {
+            try {
+                normaliserInto(new OWLAxiomsAdapted()).processAxioms(List.of(axiom));
+                accepted.add(axiom);
+            } catch (IllegalArgumentException rejection) {
+                drop(DroppedClause.Reason.REJECTED_AXIOM, axiom + ": " + rejection.getMessage());
+                rejected++;
+            }
+        }
+        LogOutput.printAlways("HermiT's normaliser rejects " + rejected + " axiom(s) of "
+                + nameOf(ontology) + "; the restriction reasoning goes on without them");
+
+        try {
+            OWLAxiomsAdapted normalised = new OWLAxiomsAdapted();
+            normaliserInto(normalised).processAxioms(accepted);
+            return normalised;
+        } catch (IllegalArgumentException rejection) {
+            drop(DroppedClause.Reason.REJECTED_ONTOLOGY, nameOf(ontology) + ": "
+                    + rejection.getMessage());
+            return new OWLAxiomsAdapted();
+        }
+    }
+
+
+    private static String nameOf(OWLOntology ontology) {
+        if (ontology.getOntologyID().getOntologyIRI().isPresent()) {
+            return ontology.getOntologyID().getOntologyIRI().get().toString();
+        }
+        return "an ontology without an IRI";
+    }
+
+
+    private static OWLNormalizationAdapted normaliserInto(OWLAxiomsAdapted normalised) {
+        return new OWLNormalizationAdapted(OWLManager.getOWLDataFactory(), normalised, 0);
+    }
+
 
     // propositions
 
@@ -167,7 +225,9 @@ public final class RestrictionStore {
         return identifier;
     }
 
-    /** The proposition of a fresh class, which HermiT names per ontology, allocated on first sight. */
+    /**
+     * The proposition of a fresh class, which HermiT names per ontology, allocated on first sight.
+     */
     int internFreshClass(int ontologyNumber, String iri) {
         String key = ontologyNumber + " " + iri;
         Integer known = identifierOfFreshClass.get(key);
@@ -218,9 +278,11 @@ public final class RestrictionStore {
     }
 
 
-    /** The proposition of a data range, allocated on first sight; `rdfs:Literal` is the data top. */
+    /**
+     * The proposition of a data range, allocated on first sight; `rdfs:Literal` is the data top.
+     */
     int internDataRange(DataRange dataRange) {
-        if (dataRange.isLiteral()) {
+        if (dataRange.isTopDatatype()) {
             return dataTop;
         }
         Integer known = identifierOfDataRange.get(dataRange);
@@ -280,7 +342,10 @@ public final class RestrictionStore {
         inclusions.add(inclusion);
     }
 
-    /** `sub ⊑ super` between signed properties (SignedProperties); a data property is always its outgoing token. */
+    /**
+     * `sub ⊑ super` between signed properties (SignedProperties); a data property is always its
+     * outgoing token.
+     */
     void addSubProperty(PropertyKind kind, int subProperty, int superProperty) {
         superPropertiesOf.get(kind).computeIfAbsent(subProperty, property -> new TreeSet<>()).add(superProperty);
     }
@@ -307,7 +372,8 @@ public final class RestrictionStore {
     }
 
     public SortedSet<Integer> propertiesWithSuperProperties(PropertyKind kind) {
-        return Collections.unmodifiableSortedSet(new TreeSet<>(superPropertiesOf.get(kind).keySet()));
+        SortedSet<Integer> properties = new TreeSet<>(superPropertiesOf.get(kind).keySet());
+        return Collections.unmodifiableSortedSet(properties);
     }
 
     public List<DroppedClause> dropped() {
@@ -316,7 +382,10 @@ public final class RestrictionStore {
 
     // description
 
-    /** A proposition in words: `o1:A1`, `o2:def#0`, `{a}`, `union(o1:B1, o1:C1)`, `TOP`, `xsd:integer`, `some(o1:p1, o1:C1)`. */
+    /**
+     * A proposition in words: `o1:A1`, `o2:def#0`, `{a}`, `union(o1:B1, o1:C1)`, `TOP`,
+     * `xsd:integer`, `some(o1:p1, o1:C1)`.
+     */
     public String describe(int proposition) {
         if (proposition == HornInclusion.FALSE) {
             return "FALSE";
@@ -366,9 +435,9 @@ public final class RestrictionStore {
         return restriction.kind().displayName() + "(" + restriction.cardinality() + ", " + property + ", " + filler + ")";
     }
 
-    public String describeProperty(int objectProperty) {
-        return describeProperty(PropertyKind.OBJECT, objectProperty);
-    }
+    // public String describeProperty(int objectProperty) {
+    //     return describeProperty(PropertyKind.OBJECT, objectProperty);
+    // }
 
     /** A signed property in words: `o1:p1`, or `inv(o1:p1)` for its inverse. */
     public String describeSignedProperty(PropertyKind kind, int token) {

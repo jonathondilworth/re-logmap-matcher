@@ -16,15 +16,15 @@ final class ClassFillers implements FillerRelations {
     }
 
     @Override
-    public Support subsumption(int sub, int sup) {
+    public AlternativeSupports subsumption(int sub, int sup) {
         if (store.isTop(sup)) {
-            return Support.EMPTY;
+            return AlternativeSupports.FACT;
         }
-        return classes.supportOf(sub, sup);
+        return classes.supportsOf(sub, sup);
     }
 
     @Override
-    public Support disjointness(int first, int second) {
-        return disjointness.supportOf(first, second);
+    public AlternativeSupports disjointness(int first, int second) {
+        return disjointness.supportsOf(first, second);
     }
 }

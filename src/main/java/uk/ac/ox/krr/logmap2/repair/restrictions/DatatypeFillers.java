@@ -1,6 +1,5 @@
 package uk.ac.ox.krr.logmap2.repair.restrictions;
 
-import uk.ac.ox.krr.logmap2.repair.hornSAT.Support;
 
 /** Fillers of data-property restrictions: data ranges, related through the built-in datatypes, never through correspondences. */
 final class DatatypeFillers implements FillerRelations {
@@ -12,21 +11,21 @@ final class DatatypeFillers implements FillerRelations {
     }
 
     @Override
-    public Support subsumption(int sub, int sup) {
+    public AlternativeSupports subsumption(int sub, int sup) {
         if (store.isDataTop(sup)) {
-            return Support.EMPTY;
+            return AlternativeSupports.FACT;
         }
         if (store.isDataTop(sub)) {
-            return null;
+            return AlternativeSupports.NONE;
         }
-        return Datatypes.contains(store.dataRange(sub), store.dataRange(sup)) ? Support.EMPTY : null;
+        return Datatypes.contains(store.dataRange(sub), store.dataRange(sup)) ? AlternativeSupports.FACT : AlternativeSupports.NONE;
     }
 
     @Override
-    public Support disjointness(int first, int second) {
+    public AlternativeSupports disjointness(int first, int second) {
         if (store.isDataTop(first) || store.isDataTop(second)) {
-            return null;
+            return AlternativeSupports.NONE;
         }
-        return Datatypes.disjoint(store.dataRange(first), store.dataRange(second)) ? Support.EMPTY : null;
+        return Datatypes.disjoint(store.dataRange(first), store.dataRange(second)) ? AlternativeSupports.FACT : AlternativeSupports.NONE;
     }
 }

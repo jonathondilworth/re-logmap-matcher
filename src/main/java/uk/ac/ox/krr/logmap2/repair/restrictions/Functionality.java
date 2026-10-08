@@ -5,13 +5,12 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 
 import uk.ac.ox.krr.logmap2.repair.hornSAT.HornInclusion;
-import uk.ac.ox.krr.logmap2.repair.hornSAT.Support;
 
 /**
  * Which signed properties are functional, read from the store's clauses attached to TOP
  * (`TOP → atMost(1, F, TOP)` is `Functional(F)`, `TOP → atMost(1, F⁻, TOP)` is
  * `InverseFunctional(F)`; `rdfs:Literal` is the top for a data property), and under
- * which support a signed property lies below a functional one through the property
+ * which supports a signed property lies below a functional one through the property
  * closure of its kind. Functionality reaches down the property hierarchy only.
  */
 final class Functionality {
@@ -29,23 +28,20 @@ final class Functionality {
     }
 
     /**
-     * The smallest support under which both signed properties lie below one functional
-     * property, so that a successor through each is the same individual; null when there
-     * is none.
+     * The minimal supports under which both signed properties lie below one functional
+     * property, so that a successor through each is the same individual; none when there
+     * is no such property.
      */
-    Support mergeSupportOf(int firstProperty, int secondProperty) {
-        Support best = null;
+    AlternativeSupports mergeSupportsOf(int firstProperty, int secondProperty) {
+        AlternativeSupports merge = AlternativeSupports.NONE;
 
         for (int functional : functionalProperties) {
-            Support first = properties.supportOf(firstProperty, functional);
-            Support second = properties.supportOf(secondProperty, functional);
-            if (first == null || second == null) {
-                continue;
-            }
-            best = Support.least(best, first.with(second));
+            AlternativeSupports first = properties.supportsOf(firstProperty, functional);
+            AlternativeSupports second = properties.supportsOf(secondProperty, functional);
+            merge = merge.or(first.and(second));
         }
 
-        return best;
+        return merge;
     }
 
     private static boolean isFunctionalityOfTop(RestrictionStore store, PropertyKind kind, HornInclusion inclusion) {

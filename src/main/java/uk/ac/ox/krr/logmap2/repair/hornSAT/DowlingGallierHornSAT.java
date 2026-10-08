@@ -846,10 +846,12 @@ public class DowlingGallierHornSAT {
 					
 					if (N_copy.get(link.getLabelLink())==0){  //We get false from all paths possibles
 					
+						//Also when its head was reached before: the clause is then another
+						//derivation of that head, and a plan has to break this one as well
+						blameSupportOf(link);
 						
 						if (link.getTargetLink()==FALSE){
 							disjointness_involved_in_error.add(clauses.get(link.getLabelLink()));
-							blameSupportOf(link);
 							satisfiable=false;
 							//return visitied_clauses;	do not return!!
 						}
@@ -860,7 +862,6 @@ public class DowlingGallierHornSAT {
 							
 							//Only mappings
 							//TODO put it back if necessaru (*)
-							blameSupportOf(link);
 							if (clauses.get(link.getLabelLink()).getOrigin()==HornClause.MAP){
 								mappings_involved_in_error.add(clauses.get(link.getLabelLink()));
 								

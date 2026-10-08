@@ -2,11 +2,12 @@ package uk.ac.ox.krr.logmap2.repair.hornSAT;
 
 /**
  * One surviving direction of an object- or data-property correspondence inside
- * Dowling–Gallier: `source ⊑ target` as a clause with no arc. It exists so that a plan can mask it and a
- * supported restriction clause can name it in its support and blame it; the plan search
- * then treats a property direction like a class direction, and applying it weakens or
- * deletes the correspondence. Equality is by the kind and the two properties and never
- * against a plain clause, because the identifier spaces overlap.
+ * Dowling–Gallier: `source ⊑ target` as a clause with no arc. It exists so that a plan can
+ * mask it and a supported restriction clause can name it in its support and blame it; the
+ * plan search then treats a property direction like a class direction, and applying it
+ * weakens or deletes the correspondence. Equality is by the kind and the two properties and
+ * never against a plain clause, because the identifier spaces overlap. Design spec §8.8
+ * item 2.
  */
 public final class PropertyDirectionClause extends HornClause {
 
@@ -19,10 +20,6 @@ public final class PropertyDirectionClause extends HornClause {
         this.kind = kind;
         this.source = source;
         this.target = target;
-    }
-
-    public CorrespondenceDirection.Kind kind() {
-        return kind;
     }
 
     public boolean isDataProperty() {

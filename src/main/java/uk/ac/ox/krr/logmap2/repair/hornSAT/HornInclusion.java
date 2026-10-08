@@ -44,7 +44,4 @@ public record HornInclusion(List<Integer> body, int head, Support support) {
         return head == FALSE;   // a FALSE-headed clause is a clash
     }
 
-    public boolean isSupported() {
-        return !support.isEmpty();
-    }
 }

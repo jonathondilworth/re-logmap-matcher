@@ -53,7 +53,7 @@ final class Datatypes {
     }
 
     static boolean contains(DataRange sub, DataRange sup) {
-        if (sup.isLiteral() || sub.equals(sup)) {
+        if (sup.isTopDatatype() || sub.equals(sup)) {
             return true;
         }
         if (sup.isFacetRestriction() || sup.isSingleton()) {
@@ -83,7 +83,9 @@ final class Datatypes {
     private static boolean haveDistinctValues(DataRange first, DataRange second, String family) {
         try {
             if (family.equals("number")) {
-                return new BigDecimal(first.literal().trim()).compareTo(new BigDecimal(second.literal().trim())) != 0;
+                BigDecimal firstValue = new BigDecimal(first.literal().trim());
+                BigDecimal secondValue = new BigDecimal(second.literal().trim());
+                return firstValue.compareTo(secondValue) != 0;
             }
             if (family.equals(XSD + "float") || family.equals(XSD + "double")) {
                 double firstValue = Double.parseDouble(first.literal().trim());
