@@ -8,7 +8,6 @@ import java.util.function.IntFunction;
 
 import uk.ac.ox.krr.logmap2.indexing.IndexManager;
 import uk.ac.ox.krr.logmap2.repair.hornSAT.HornInclusion;
-import uk.ac.ox.krr.logmap2.repair.hornSAT.Support;
 
 
 /**

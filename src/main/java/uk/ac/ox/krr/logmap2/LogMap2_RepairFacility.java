@@ -232,6 +232,7 @@ public class LogMap2_RepairFacility {
 		catch (Exception e){
 			//The failure is recorded and shown, and the command line exits non-zero; the result is empty
 			//when the failure came before the mappings were kept (hasKeptMappings says)
+			repair_failure = e;
 			System.out.println("Error repairing mappings using LogMap repair module: " + e.getMessage());
 			e.printStackTrace();
 		}
@@ -744,7 +745,6 @@ public class LogMap2_RepairFacility {
 		
 		if (mapping_manager.getMappings2Review().size()>0){
 		
-			mapping_manager.setExactAsFixed(false);//repair all, just in case...
 			//The reliable mappings stay fixed, as in LogMap2Core's candidate rounds: the second check
 			//then sees them, as facts, beside the mappings under review. Without them a restriction
 			//conflict that needs a mapping of each group was never found

@@ -241,6 +241,8 @@ public class DowlingGallierHornSAT {
 			Collection<CorrespondenceDirection> propertyDirections,
 			int top){
 		
+		this.top = top;
+		
 		
 		
 		//Currently used to know to which ontology belongs and identifier (the order)
@@ -354,6 +356,10 @@ public class DowlingGallierHornSAT {
 		R.clear();		
 		R.add(entity);
 		Q.add(entity);
+		if (top >= 0){
+			R.add(top);
+			Q.add(top);
+		}
 		
 		Link link = new Link(clause_num, entity);
 		

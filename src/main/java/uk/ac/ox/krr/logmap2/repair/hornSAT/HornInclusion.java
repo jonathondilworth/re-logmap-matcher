@@ -21,8 +21,6 @@ public record HornInclusion(List<Integer> body, int head, Support support) {
     public static final int FALSE = -2;
 
     public HornInclusion {
-        List<Integer> sortedBody = new ArrayList<>(body);
-        Collections.sort(sortedBody);
         // Sorted and without repeats: an atom listed twice would give Dowling-Gallier two
         // identical arcs, which its arc set collapses, and the clause would never fire.
         body = Collections.unmodifiableList(new ArrayList<>(new TreeSet<>(body)));

@@ -79,6 +79,7 @@ public final class RestrictionReasoning {
     private List<HornInclusion> clashesOver(PropertyKind kind, SupportedClosure properties, FillerRelations fillers) {
         Functionality functionality = new Functionality(store, kind, properties);
         List<HornInclusion> clauses = new ArrayList<>();
+        clauses.addAll(new ClashRules(store, kind, properties, fillers, functionality).clashes());
         if (kind == PropertyKind.OBJECT) {
             clauses.addAll(new SelfRules(store, properties, functionality).memberships());
         }
