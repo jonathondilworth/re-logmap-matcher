@@ -1,6 +1,5 @@
 package uk.ac.ox.krr.logmap2.repair.restrictions;
 
-import uk.ac.ox.krr.logmap2.repair.hornSAT.Support;
 
 /** Fillers of object-property restrictions: classes, related through the closure and the index. */
 final class ClassFillers implements FillerRelations {

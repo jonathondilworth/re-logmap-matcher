@@ -1,0 +1,20 @@
+#Settings of the repair facility, read from the working directory when the facility is
+#invoked without being told its cleaning mode (the command line's DEBUGGER mode). A caller
+#that passes the mode is believed and this file is not read. Without this file the defaults
+#below apply; a value that cannot be read leaves its setting at the default, a line that is
+#not key|value or names no setting is skipped; the error stream says so in each case.
+
+#Two-step cleaning: the reliable equivalences (confidence at least good_isub_anchors) are
+#repaired first and fixed, the rest is repaired against them; false repairs everything together.
+two_step_cleaning|true
+
+#How many alternative supports a derived restriction clause is kept under (at least 1).
+max_alternative_supports|8
+
+#The reasoner LogMap indexes the two ontologies with: HermiT, Structural or ELK (the
+#matcher takes this from parameters.txt; the facility from here).
+reasoner|HermiT
+
+#With HermiT: false sends an ontology that declares datatypes to ELK instead, as the
+#matcher's parameters.txt does; true classifies it with HermiT.
+reason_datatypes|false
