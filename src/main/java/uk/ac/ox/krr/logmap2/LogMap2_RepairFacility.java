@@ -853,6 +853,13 @@ public class LogMap2_RepairFacility {
 				addSubMapping2Mappings2Review(ide1, ide2);
 				num_mappings2review++;
 			}
+			else if (map.getMappingDirection()==Utilities.EQ){
+				//An equivalence that is not reliable is reviewed in both directions. It used to fall
+				//into the branch below and came out as its right-to-left direction alone
+				addSubMapping2Mappings2Review(ide1, ide2);
+				addSubMapping2Mappings2Review(ide2, ide1);
+				num_mappings2review++;
+			}
 			else{
 				addSubMapping2Mappings2Review(ide2, ide1);
 				num_mappings2review++;
