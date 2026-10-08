@@ -18,15 +18,21 @@ import uk.ac.ox.krr.logmap2.repair.hornSAT.Support;
  * hold. Design spec §6.3 ("one clause per distinct support set") and §7 ("once per
  * distinct (conclusion, support) pair").
  *
- * <p>Only the {@value #MOST_KEPT} smallest supports are kept. Keeping all of them is not
- * possible: on a Conference candidate alignment one answer has 2,448 minimal supports.
- * Every kept support is a genuine one, so blame stays sound; what the bound gives up is
- * a clause that still holds through a support beyond it (docs/steps/18.md).
+ * <p>Only the {@value #MOST_KEPT} smallest is kept on this branch (docs/steps/20.md): a
+ * clause is in the theory under one support, as before step 18. Keeping all of them is not
+ * possible (on a Conference candidate alignment one answer has 2,448 minimal supports), and
+ * what a bound gives up is a clause that still holds through a support beyond it. That
+ * case is left to the repair call, which repeats its whole-ontology stage on a theory built
+ * again for as long as it removes something: the clause then comes back under its next
+ * support.
  */
 public record AlternativeSupports(List<Support> supports) {
 
-    /** On the Conference inputs every result is the same with 8 and with 16 (step 18). */
-    static final int MOST_KEPT = 8;
+    // /** On the Conference inputs every result is the same with 8 and with 16 (step 18). */
+    // static final int MOST_KEPT = 8;
+
+    /** TEST: kept 8 (the Conference results are the same with 8 and with 16). */
+    static final int MOST_KEPT = 1;
 
     /**
      * Smaller supports first, then by their directions in order, so that equal answers are equal
