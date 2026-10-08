@@ -18,7 +18,9 @@ import org.semanticweb.HermiT.structural.OWLAxiomsAdapted;
 import org.semanticweb.HermiT.structural.OWLNormalizationAdapted;
 import org.semanticweb.owlapi.apibinding.OWLManager;
 import org.semanticweb.owlapi.model.OWLAxiom;
+import org.semanticweb.owlapi.model.OWLLogicalAxiom;
 import org.semanticweb.owlapi.model.OWLOntology;
+import org.semanticweb.owlapi.model.parameters.Imports;
 
 import uk.ac.ox.krr.logmap2.indexing.IndexManager;
 import uk.ac.ox.krr.logmap2.io.LogOutput;
@@ -99,16 +101,20 @@ public final class RestrictionStore {
 
 
     /**
-     * HermiT's normal form of the ontology. The normaliser rejects some axioms by throwing (a
-     * SWRL rule with a built-in atom, an anonymous individual in a same-individual axiom and
-     * others). The ontology is then normalised without the axioms that are rejected when taken
-     * one by one, and each of those is reported as dropped. If what is left is rejected as
-     * well, nothing of the ontology is read. Either way the theory is weaker, never wrong.
+     * HermiT's normal form of the ontology and of what it imports, in one invocation of the
+     * normaliser (its fresh-class numbering restarts with each): the index reads the imports
+     * closure too, so an axiom of an imported ontology must reach the rules as its own do.
+     * The normaliser's own entry point would read the ontology's own axioms alone. The
+     * normaliser rejects some axioms by throwing (a SWRL rule with a built-in atom, an
+     * anonymous individual in a same-individual axiom and others). The ontology is then
+     * normalised without the axioms that are rejected when taken one by one, and each of
+     * those is reported as dropped. If what is left is rejected as well, nothing of the
+     * ontology is read. Either way the theory is weaker, never wrong.
      */
     private OWLAxiomsAdapted normalFormOf(OWLOntology ontology) {
         try {
             OWLAxiomsAdapted normalised = new OWLAxiomsAdapted();
-            normaliserInto(normalised).processOntology(ontology);
+            normaliserInto(normalised).processAxioms(logicalAxiomsWithImports(ontology));
             return normalised;
         } catch (IllegalArgumentException rejection) {
             return normalFormOfTheAcceptedAxioms(ontology);
@@ -120,7 +126,7 @@ public final class RestrictionStore {
         List<OWLAxiom> accepted = new ArrayList<>();
         int rejected = 0;
 
-        for (OWLAxiom axiom : ontology.getLogicalAxioms()) {
+        for (OWLAxiom axiom : logicalAxiomsWithImports(ontology)) {
             try {
                 normaliserInto(new OWLAxiomsAdapted()).processAxioms(List.of(axiom));
                 accepted.add(axiom);
@@ -141,6 +147,11 @@ public final class RestrictionStore {
                     + rejection.getMessage());
             return new OWLAxiomsAdapted();
         }
+    }
+
+    
+    private static Set<OWLLogicalAxiom> logicalAxiomsWithImports(OWLOntology ontology) {
+        return ontology.getLogicalAxioms(Imports.INCLUDED);
     }
 
 

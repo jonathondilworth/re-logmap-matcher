@@ -93,7 +93,8 @@ public class AnchorAssessment {
 	
 	private Map<Integer, Boolean> unsatClasses2repaired;
 
-	/**Classes unsatisfiable with no correspondence to blame: reported, never repaired*/
+	// /**Classes unsatisfiable with no correspondence to blame: reported, never repaired*/
+	/**Classes unsatisfiable, and individuals inconsistent, with no correspondence under repair to blame: reported, never repaired; one set per repair call*/
 	private Set<Integer> preexistingIncoherence = new HashSet<Integer>();
 
 		
@@ -678,10 +679,15 @@ public class AnchorAssessment {
 				completeSetOfConflictiveMappings(cls, dgSat.getConflictiveMappings());  
 				
 				//No correspondence to blame: the input ontologies are incoherent on their own here
+				//No correspondence under repair to blame: the input ontologies are incoherent on their
+				//own here, or the conflict runs through fixed correspondences alone
 				if (dgSat.getConflictiveMappings().isEmpty()){
 					if (preexistingIncoherence.add(cls)){
-						LogOutput.printAlways("Pre-existing incoherence: " + index.getIRIStr4ConceptIndex(cls)
-								+ " is unsatisfiable without any correspondence; not repaired");
+						// LogOutput.printAlways("Pre-existing incoherence: " + index.getIRIStr4ConceptIndex(cls)
+								// + " is unsatisfiable without any correspondence; not repaired");
+						
+						LogOutput.printAlways("Pre-existing incoherence: " + index.getIRIStr4ClassOrIndividualIndex(cls)
+							+ " is unsatisfiable without any correspondence under repair; not repaired");
 					}
 					continue;
 				}
@@ -844,7 +850,11 @@ public class AnchorAssessment {
 			
 				init1 = Calendar.getInstance().getTimeInMillis();
 				
-				CheckSatisfiabilityOfIntegration_DandG(index.getIndividuaIdentifierSet());
+				// CheckSatisfiabilityOfIntegration_DandG(index.getIndividuaIdentifierSet());
+
+				//Through the individuals' sweep, as the first pass: the class sweep would ask an individual
+				//for subclasses and name it as a class
+				CheckSatisfiabilityOfIntegration_DandG_Individuals(index.getIndividuaIdentifierSet());
 				
 				SAT.addAll(SATvisited);
 					
@@ -928,7 +938,16 @@ public class AnchorAssessment {
 				
 				//In some cases there are side effecte between mappings and we need to collect more mappings
 				completeSetOfConflictiveMappings(indiv, dgSat.getConflictiveMappings());  
-				
+
+				//No correspondence under repair to blame: the individual is inconsistent on its own or
+				//through fixed correspondences alone; reported as the class sweep reports a class
+				if (dgSat.getConflictiveMappings().isEmpty()){
+					if (preexistingIncoherence.add(indiv)){
+						LogOutput.printAlways("Pre-existing inconsistency: " + index.getIRIStr4ClassOrIndividualIndex(indiv)
+								+ " is inconsistent without any correspondence under repair; not repaired");
+					}
+					continue;
+				}
 					
 				unsatClasses2conflictiveMappings.put(indiv, new HashSet<HornClause>(dgSat.getConflictiveMappings()));
 										

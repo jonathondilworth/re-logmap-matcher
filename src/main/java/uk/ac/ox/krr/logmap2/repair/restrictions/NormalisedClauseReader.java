@@ -36,6 +36,7 @@ import org.semanticweb.owlapi.model.OWLObjectSomeValuesFrom;
 import org.semanticweb.owlapi.util.OWLClassExpressionVisitorExAdapter;
 
 import uk.ac.ox.krr.logmap2.indexing.IndexManager;
+import uk.ac.ox.krr.logmap2.indexing.entities.ClassIndex;
 import uk.ac.ox.krr.logmap2.repair.hornSAT.HornInclusion;
 import uk.ac.ox.krr.logmap2.utilities.Utilities;
 
@@ -47,7 +48,9 @@ import uk.ac.ox.krr.logmap2.utilities.Utilities;
  * (a union: a domain or range over a union, HermiT's definition of a union filler, a
  * plain `A ⊑ B ⊔ C`) become one union proposition above its members; a union with a
  * restriction among its heads is dropped. A clause over named classes only is left to
- * LogMap's index; everything else is dropped with a reason. Data restrictions are read the
+ * LogMap's index, which carries the taxonomy, the general Horn axioms and the disjointness
+ * it has read, except a clash the index has not read (`A ⊑ ¬B`, `A ⊓ B ⊑ ⊥`, the pairs of a
+ * `DisjointUnion`), which stays here; everything else is dropped with a reason. Data restrictions are read the
  * same way, with data ranges as fillers and `rdfs:Literal` as their top. A hasValue arrives
  * as an existential over a nominal `{a}` (or a single literal) and is read as one; a hasSelf
  * is a restriction of its own with the companion `hasSelf(R) → ∃R.⊤`; reflexivity and
@@ -212,7 +215,7 @@ final class NormalisedClauseReader {
             mentionsRestrictionOrFreshClass = true;
         }
 
-        if (!mentionsRestrictionOrFreshClass) {
+        if (!mentionsRestrictionOrFreshClass && isCarriedByTheIndex(body, head)) {
             store.countCarriedByIndex();
             return;
         }
@@ -222,6 +225,27 @@ final class NormalisedClauseReader {
         store.add(HornInclusion.of(body, head));
         addOrientationTwin(body, head);
     }
+
+
+    /**
+     * The index carries every named-only inclusion and general Horn axiom, and a disjointness
+     * it has read from a `DisjointClasses` axiom; a clash it has not read (`A ⊑ ¬B`,
+     * `A ⊓ B ⊑ ⊥`, the pairs of a `DisjointUnion`) is nobody's unless the store keeps it. The
+     * per-class sets are asked, not the index's map of them, which is built once on first
+     * use and would be frozen here before the second ontology is read.
+     */
+    private boolean isCarriedByTheIndex(List<Integer> body, int head) {
+        if (head != HornInclusion.FALSE) {
+            return true;
+        }
+        if (body.size() != 2) {
+            return false;
+        }
+        ClassIndex first = index.getClassIndex(body.get(0));
+        return first != null && first.hasDirectDisjointClasses()
+                && first.getDisjointClasses().contains(body.get(1));
+    }
+
 
     /**
      * A domain and a range are one fact read two ways: `∃R.⊤ ⊑ D` is `⊤ ⊑ ∀R⁻.D` and
@@ -441,6 +465,7 @@ final class NormalisedClauseReader {
         if (cardinality == 0) {
             return bodyAtom(Restriction.some(propertyIdentifier, incoming, fillerIdentifier));
         }
+        refuseAnAtMostWithoutADual(cardinality, property);
         Restriction atMost = Restriction.atMost(cardinality, propertyIdentifier, incoming, fillerIdentifier);
         Restriction dual = Restriction.atLeast(cardinality + 1, propertyIdentifier, incoming, fillerIdentifier);
         return Literal.headWithDual(store.intern(atMost), dual);
@@ -489,11 +514,27 @@ final class NormalisedClauseReader {
             Restriction some = Restriction.some(PropertyKind.DATA, propertyIdentifier, fillerIdentifier);
             return bodyAtom(some);
         }
+        refuseAnAtMostWithoutADual(cardinality, property);
         Restriction atMost = Restriction.atMost(
                 PropertyKind.DATA, cardinality, propertyIdentifier, fillerIdentifier);
         Restriction dual = Restriction.atLeast(
                 PropertyKind.DATA, cardinality + 1, propertyIdentifier, fillerIdentifier);
         return Literal.headWithDual(store.intern(atMost), dual);
+    }
+
+
+    /**
+     * The dual of `≤n` is `≥n+1`, which no int holds for the largest int. Such a clause is
+     * dropped with a reason and said on the error stream rather than aborting the repair:
+     * the facility's catch-all would otherwise turn the exception into an empty result.
+     */
+    private static void refuseAnAtMostWithoutADual(int cardinality, Object property) {
+        if (cardinality == Integer.MAX_VALUE) {
+            System.err.println("A maximum cardinality of " + Integer.MAX_VALUE + " over "
+                    + property + " cannot be read (its dual at-least is not an int);"
+                    + " the clause is left out of the restriction reasoning.");
+            throw new Unreadable(DroppedClause.Reason.UNREPRESENTABLE_CARDINALITY);
+        }
     }
 
 

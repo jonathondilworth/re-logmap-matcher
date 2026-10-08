@@ -779,7 +779,7 @@ public class Parameters {
 	 * reason_datatypes), read from facility_parameters.txt in the given directory: the working
 	 * directory when it is empty, with or without a trailing separator otherwise. All start from their defaults; without
 	 * the file they stay there; a value that cannot be read puts its setting back there, and a line
-	 * that is not key|value or names no setting is skipped. Each case is said on the error stream,
+	 * that is not key|value (a blank line and a # comment apart) or names no setting is skipped. Each case is said on the error stream,
 	 * as readParameters does for its file. parameters.txt is not read
 	 */
 	public static void readFacilityParameters(String directory){
@@ -810,7 +810,8 @@ public class Parameters {
 		}
 		
 		for (String line : lines){
-			if (line.startsWith("#") || line.indexOf("|")<0){
+			// if (line.startsWith("#") || line.indexOf("|")<0){
+			if (line.isBlank() || line.startsWith("#")){
 				continue;
 			}
 			readFacilityParameter(line);

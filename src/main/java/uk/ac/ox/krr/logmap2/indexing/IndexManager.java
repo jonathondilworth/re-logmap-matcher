@@ -920,6 +920,18 @@ public abstract class IndexManager {
 		return identifier2ClassIndex.get(index).getIRI(getIRIStrOnto4Id(onto_id));		
 	}
 	
+
+	/**
+	 * The IRI of a class or of an individual: classes and individuals share one identifier space,
+	 * and the repair sweeps both
+	 */
+	public String getIRIStr4ClassOrIndividualIndex(int index){
+		if (identifier2ClassIndex.containsKey(index))
+			return getIRIStr4ConceptIndex(index);
+		return getIRIStr4IndividualIndex(index);
+	}
+
+	
 	public String getNameSpace4ConceptIndex(int index){		
 		
 		int onto_id = identifier2ClassIndex.get(index).getOntologyId();
@@ -1255,7 +1267,7 @@ public abstract class IndexManager {
 		ident2equivalents.clear();
 	}
 	
-	
+
 	
 	private Map<Integer,Set<Integer>> ident2subclasses_module = new HashMap<Integer,Set<Integer>>();
 	

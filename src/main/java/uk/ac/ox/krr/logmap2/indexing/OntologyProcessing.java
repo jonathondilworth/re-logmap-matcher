@@ -3418,7 +3418,9 @@ public class OntologyProcessing {
 			
 			idecls=class2identifier.get(cls);
 			
-			for (OWLEquivalentClassesAxiom ax: onto.getEquivalentClassesAxioms(cls)){
+			// for (OWLEquivalentClassesAxiom ax: onto.getEquivalentClassesAxioms(cls)){
+
+			for (OWLEquivalentClassesAxiom ax: equivalentClassesAxiomsInClosure(cls)){
 				
 				for (OWLClassExpression exp_equiv : ax.getClassExpressions()){
 					
@@ -3428,7 +3430,9 @@ public class OntologyProcessing {
 				
 			}//For equiv axioms
 			
-			for (OWLSubClassOfAxiom ax: onto.getSubClassAxiomsForSuperClass(cls)){
+			// for (OWLSubClassOfAxiom ax: onto.getSubClassAxiomsForSuperClass(cls)){
+
+			for (OWLSubClassOfAxiom ax: subClassAxiomsForSuperClassInClosure(cls)){
 				
 				addOWLClassExpresion2GeneralHornAxiom(idecls, ax.getSubClass());
 				
@@ -3485,7 +3489,27 @@ public class OntologyProcessing {
 	}
 	
 	
+	/**
+	 * The equivalent-classes axioms of a class in the imports closure: the general Horn
+	 * axioms are read from the closure, as the classes, the taxonomy and the disjointness are.
+	 */
+	private Set<OWLEquivalentClassesAxiom> equivalentClassesAxiomsInClosure(OWLClass cls){
+		Set<OWLEquivalentClassesAxiom> axioms = new HashSet<OWLEquivalentClassesAxiom>();
+		for (OWLOntology ontology_in_closure : onto.getImportsClosure()){
+			axioms.addAll(ontology_in_closure.getEquivalentClassesAxioms(cls));
+		}
+		return axioms;
+	}
 	
+
+	/** The subclass axioms with the class as superclass, in the imports closure. */
+	private Set<OWLSubClassOfAxiom> subClassAxiomsForSuperClassInClosure(OWLClass cls){
+		Set<OWLSubClassOfAxiom> axioms = new HashSet<OWLSubClassOfAxiom>();
+		for (OWLOntology ontology_in_closure : onto.getImportsClosure()){
+			axioms.addAll(ontology_in_closure.getSubClassAxiomsForSuperClass(cls));
+		}
+		return axioms;
+	}
 	
 	
 	/**

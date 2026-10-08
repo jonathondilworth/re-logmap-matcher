@@ -212,6 +212,7 @@ public class LogMap2_RepairFacility {
 			
 			//Always... at least for testing
 			keepRepairedMappings();
+			mappings_kept = true;
 			
 			
 			if (!outPutFileName.equals("")){
@@ -229,11 +230,44 @@ public class LogMap2_RepairFacility {
 		
 		}
 		catch (Exception e){
+			//The failure is recorded and shown, and the command line exits non-zero; the result is empty
+			//when the failure came before the mappings were kept (hasKeptMappings says)
 			System.out.println("Error repairing mappings using LogMap repair module: " + e.getMessage());
+			e.printStackTrace();
 		}
 		
 		
 	}
+	
+
+	/**The exception that ended the repair, if one did. Before the mappings were kept it leaves the result
+	 * empty; after that (the optional final satisfiability check) the mappings and the files are there*/
+	private Exception repair_failure;
+	
+	/**Set once the repaired mappings are kept: after that only the save (which catches its own errors)
+	 * and the optional final satisfiability check run*/
+	private boolean mappings_kept = false;
+	
+	public boolean hasFailed(){
+		return repair_failure!=null;
+	}
+	
+	public Exception getFailure(){
+		return repair_failure;
+	}
+	
+	public boolean hasKeptMappings(){
+		return mappings_kept;
+	}
+	
+	
+	/**Everything the repair calls of this facility reported as incoherent on its own (each call reports anew)*/
+	private Set<Integer> preexisting_incoherence = new HashSet<Integer>();
+	
+	private void collectPreexistingIncoherence(){
+		preexisting_incoherence.addAll(mapping_assessment.getPreexistingIncoherence());
+	}
+	
 	
 	
 	
@@ -624,6 +658,7 @@ public class LogMap2_RepairFacility {
 				//We have an specific method since there is not a top-down search. And we first repair classes
 				mapping_assessment.CheckSatisfiabilityOfIntegration_DandG_Individuals(
 						mapping_manager.getInstanceMappings());
+				collectPreexistingIncoherence();
 				
 				fin = Calendar.getInstance().getTimeInMillis();
 				LogOutput.print("Time cleaning instance mappings D&G (s): " + (float)((double)fin-(double)init)/1000.0);
@@ -661,6 +696,7 @@ public class LogMap2_RepairFacility {
 			mapping_assessment.CountSatisfiabilityOfIntegration_DandG(mapping_manager.getLogMapMappings());
 		}
 		mapping_assessment.CheckSatisfiabilityOfIntegration_DandG(mapping_manager.getLogMapMappings());
+		collectPreexistingIncoherence();
 		fin = Calendar.getInstance().getTimeInMillis();
 		LogOutput.print("\tTime cleaning reliable class mappings Dowling and Gallier (s): " + (float)((double)fin-(double)init)/1000.0);
 		LogOutput.print("\tRepaired Root Unsat using Dowling and Gallier (aproximation): " + mapping_assessment.getNumRepairedUnsatClasses());
@@ -719,6 +755,7 @@ public class LogMap2_RepairFacility {
 				mapping_assessment.CountSatisfiabilityOfIntegration_DandG(mapping_manager.getMappings2Review());
 			}
 			mapping_assessment.CheckSatisfiabilityOfIntegration_DandG(mapping_manager.getMappings2Review());  //With Fixed mappings!
+			collectPreexistingIncoherence();
 			fin = Calendar.getInstance().getTimeInMillis();
 			LogOutput.print("Time cleaning rest of the mappings using D&G (s): " + (float)((double)fin-(double)init)/1000.0);
 			LogOutput.print("\tRepaired Root Unsat using Dowling and Gallier 2 (aproximation): " + mapping_assessment.getNumRepairedUnsatClasses());
@@ -798,6 +835,7 @@ public class LogMap2_RepairFacility {
 			mapping_assessment.CountSatisfiabilityOfIntegration_DandG(mapping_manager.getLogMapMappings());
 		}
 		mapping_assessment.CheckSatisfiabilityOfIntegration_DandG(mapping_manager.getLogMapMappings());
+		collectPreexistingIncoherence();
 		fin = Calendar.getInstance().getTimeInMillis();
 		LogOutput.print("\tTime cleaning class mappings Dowling and Gallier (s): " + (float)((double)fin-(double)init)/1000.0);
 		LogOutput.print("\tRepaired Root Unsat using Dowling and Gallier (aproximation): " + mapping_assessment.getNumRepairedUnsatClasses());
@@ -1275,13 +1313,16 @@ public class LogMap2_RepairFacility {
 	}
 
 	/**
-	 * Returns the IRIs of the classes found unsatisfiable without any correspondence to blame (not repaired)
+	 * Returns the IRIs of the classes found unsatisfiable, and of the individuals found inconsistent,
+	 * without any correspondence under repair to blame (not repaired), over every repair call of this facility
 	 * @return
 	 */
 	public Set<String> getPreexistingIncoherence(){
 		Set<String> iris = new HashSet<String>();
-		for (int ide : mapping_assessment.getPreexistingIncoherence()){
-			iris.add(index.getIRIStr4ConceptIndex(ide));
+		// for (int ide : mapping_assessment.getPreexistingIncoherence()){
+		// 	iris.add(index.getIRIStr4ConceptIndex(ide));
+		for (int ide : preexisting_incoherence){
+			iris.add(index.getIRIStr4ClassOrIndividualIndex(ide));
 		}
 		return iris;
 	}
