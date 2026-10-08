@@ -203,6 +203,11 @@ public final class RestrictionStore {
         return membersOfUnion.containsKey(proposition);
     }
 
+    /** Every union proposition, in identifier order. */
+    public SortedSet<Integer> unions() {
+        return Collections.unmodifiableSortedSet(new TreeSet<>(membersOfUnion.keySet()));
+    }
+
     /** The members of a union, in identifier order. */
     public List<Integer> membersOf(int union) {
         List<Integer> members = membersOfUnion.get(union);

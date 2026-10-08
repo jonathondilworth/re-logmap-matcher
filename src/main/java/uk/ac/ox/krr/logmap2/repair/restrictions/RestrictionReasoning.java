@@ -18,8 +18,10 @@ import uk.ac.ox.krr.logmap2.repair.hornSAT.HornInclusion;
  * through another. Rebuilt at every build, so a correspondence removed by an earlier plan
  * no longer supports anything. Derivation takes two passes: the S-links of both kinds
  * first, then the clashes, whose class disjointness walks the class closure bridged by
- * those links and by the store's attachments. Design spec §6.1 (the edge sets), §6.1b (the
- * bridge), §6.3 (supports), §8.1 (the contract) and §8.5 (once per build).
+ * those links and by the store's attachments. The same bridged closure gives each union
+ * the common ancestors of its members (rule U1, {@link UnionRules}). Design spec §6.1 (the
+ * edge sets), §6.1b (the bridge), §6.3 (supports), §8.1 (the contract) and §8.5 (once per
+ * build).
  */
 public final class RestrictionReasoning {
 
@@ -45,6 +47,8 @@ public final class RestrictionReasoning {
     public List<HornInclusion> clausesFor(Map<Integer, Set<Integer>> fixedMappings,
             Map<Integer, Set<Integer>> mappingsUnderRepair, Set<HornClause> removedDirections,
             Collection<CorrespondenceDirection> propertyDirections) {
+
+        AlternativeSupports.refuseASettingBelowOne();
                 
         SupportedClosure classes = classClosure(fixedMappings, mappingsUnderRepair, removedDirections);
         SupportedClosure objectProperties = propertyClosure(PropertyKind.OBJECT, CorrespondenceDirection.Kind.OBJECT_PROPERTY, propertyDirections);
@@ -62,6 +66,7 @@ public final class RestrictionReasoning {
 
 
         List<HornInclusion> clauses = new ArrayList<>(store.inclusions());
+        clauses.addAll(new UnionRules(store, bridge).inclusions());
         clauses.addAll(objectLinks);
         clauses.addAll(clashesOver(PropertyKind.OBJECT, objectProperties, bridgedClassFillers));
         clauses.addAll(dataLinks);
@@ -69,7 +74,7 @@ public final class RestrictionReasoning {
         return clauses;
     }
 
-    
+
     /** The clashes, and for object properties the self-edge memberships, among the restrictions of one property kind. */
     private List<HornInclusion> clashesOver(PropertyKind kind, SupportedClosure properties, FillerRelations fillers) {
         Functionality functionality = new Functionality(store, kind, properties);

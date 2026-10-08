@@ -26,6 +26,10 @@ reasoner|HermiT
 #reasoner|ELK
 #Repair
 perform_repair|true
+###Restriction-aware repair: a derived clause is kept under at most this many alternative supports
+###(the smallest ones). 1 gives one support per clause; values below 1 are refused.
+max_alternative_supports|8
+###
 #Global information for Downling and Gallier
 glogal_info|true
 timeout|25

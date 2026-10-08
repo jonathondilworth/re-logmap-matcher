@@ -138,6 +138,9 @@ public class Parameters {
 	
 	public static int good_ambiguity = 2;
 	
+	//Restriction-aware repair: how many alternative supports a derived clause is kept under
+	public static int max_alternative_supports = 8;
+
 	//Note that even if overlapping is set to true. It will only applied for big ontologies >15000 
 	public static boolean use_overlapping = false;
 	
@@ -269,6 +272,8 @@ public class Parameters {
 	private static final String max_ambiguity_str = "max_ambiguity";
 	
 	private static final String good_ambiguity_str = "good_ambiguity";
+
+	private static final String max_alternative_supports_str = "max_alternative_supports";
 	 
 	private static final String use_overlapping_str = "use_overlapping";
 	
@@ -557,6 +562,9 @@ public class Parameters {
 				}
 				else if (elements[0].equals(good_ambiguity_str)){
 					good_ambiguity = Integer.valueOf(elements[1]);
+				}
+				else if (elements[0].equals(max_alternative_supports_str)){
+					max_alternative_supports = Integer.valueOf(elements[1]);
 				}
 				else if (elements[0].equals(use_overlapping_str)){
 					use_overlapping = Boolean.valueOf(elements[1]);

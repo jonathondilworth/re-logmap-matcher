@@ -5,6 +5,7 @@ import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 
+import uk.ac.ox.krr.logmap2.Parameters;
 import uk.ac.ox.krr.logmap2.repair.hornSAT.CorrespondenceDirection;
 import uk.ac.ox.krr.logmap2.repair.hornSAT.Support;
 
@@ -18,13 +19,12 @@ import uk.ac.ox.krr.logmap2.repair.hornSAT.Support;
  * hold. Design spec §6.3 ("one clause per distinct support set") and §7 ("once per
  * distinct (conclusion, support) pair").
  *
- * <p>Only the {@value #MOST_KEPT} smallest is kept on this branch (docs/steps/20.md): a
- * clause is in the theory under one support, as before step 18. Keeping all of them is not
- * possible (on a Conference candidate alignment one answer has 2,448 minimal supports), and
- * what a bound gives up is a clause that still holds through a support beyond it. That
- * case is left to the repair call, which repeats its whole-ontology stage on a theory built
- * again for as long as it removes something: the clause then comes back under its next
- * support.
+ * <p>Only the smallest supports are kept, as many as the setting
+ * `max_alternative_supports` says (eight in the shipped parameters.txt and in
+ * {@link Parameters}). Keeping all of them is not possible: on a Conference candidate
+ * alignment one answer has 2,448 minimal supports. Every kept support is a genuine one, so
+ * blame stays sound; what the bound gives up is a clause that still holds through a
+ * support beyond it (docs/steps/18.md, docs/steps/21.md).
  */
 public record AlternativeSupports(List<Support> supports) {
 
@@ -32,7 +32,7 @@ public record AlternativeSupports(List<Support> supports) {
     // static final int MOST_KEPT = 8;
 
     /** TEST: kept 8 (the Conference results are the same with 8 and with 16). */
-    static final int MOST_KEPT = 1;
+    // static final int MOST_KEPT = 1;
 
     /**
      * Smaller supports first, then by their directions in order, so that equal answers are equal
@@ -92,12 +92,18 @@ public record AlternativeSupports(List<Support> supports) {
     }
 
     private static List<Support> minimalOf(List<Support> candidates) {
+        if (candidates.size() < 2) {
+            // Nothing to choose from, whatever the setting says. NONE and FACT are built this
+            // way when the class is loaded, so they must not depend on the setting.
+            return List.copyOf(candidates);
+        }
         List<Support> smallestFirst = new ArrayList<>(candidates);
         smallestFirst.sort(SMALLEST_FIRST);
 
+        int mostKept = mostKept();
         List<Support> minimal = new ArrayList<>();
         for (Support candidate : smallestFirst) {
-            if (minimal.size() == MOST_KEPT) {
+            if (minimal.size() == mostKept) {
                 break;
             }
             if (!containsOneOf(candidate, minimal)) {
@@ -105,6 +111,24 @@ public record AlternativeSupports(List<Support> supports) {
             }
         }
         return List.copyOf(minimal);
+    }
+
+    private static int mostKept() {
+        refuseASettingBelowOne();
+        return Parameters.max_alternative_supports;
+    }
+
+    /**
+     * With no support kept, every derived fact would read as one that does not hold. Checked at
+     * the start of every build and wherever several supports meet.
+     */
+    static void refuseASettingBelowOne() {
+        if (Parameters.max_alternative_supports < 1) {
+            throw new IllegalArgumentException("max_alternative_supports is "
+                    + Parameters.max_alternative_supports
+                    + ": a derived clause needs at least one support; set it to 1 or more in"
+                    + " parameters.txt");
+        }
     }
 
     private static boolean containsOneOf(Support candidate, List<Support> smaller) {
