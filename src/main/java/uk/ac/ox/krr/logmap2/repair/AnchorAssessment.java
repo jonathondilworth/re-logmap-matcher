@@ -793,57 +793,73 @@ public class AnchorAssessment {
 		//---------------------------------------
 		LogOutput.print("\n\nALL ONTOLOGY");
 		LogOutput.print("-------------------------");
-		init1 = Calendar.getInstance().getTimeInMillis();
-		useProjection=false;
-		dealWithHardCases=false;
-		
-		setDowlingAndGallier(useProjection, mappings2repair, true); //we add indiv2classtypes
-		
-		
-		CheckSatisfiabilityOfIntegration_DandG_Individuals(index.getIndividuaIdentifierSet());
-		
-		SAT.addAll(SATvisited);
-			
-		LogOutput.print("UNSAT found: " + unSATvisited.size());
-		//LogOutput.print("SAT found: " + SATvisited.size());
-		
-		unSATvisited.clear(); //we need to clear structure
-		SATvisited.clear();
-		
-		LogOutput.print("Remaining hard cases all onto (1 Iter): " + hard_cases_still2solve);
-		
-		
-		fin1 = Calendar.getInstance().getTimeInMillis();
-		LogOutput.print("\tTime ckecking satisfiability with D&G (Big projection, simple cases) (s): " + (float)((double)fin1-(double)init1)/1000.0);
 
+		//Repeated as the class stage is, on a theory built again from what is left, for as long
+		//as it removes something: the theory holds a restriction clause under a bounded number of
+		//supports, and a plan that masked those need not have broken every way the clause holds
+		int num_removed_before;
+		List<CorrespondenceDirection> property_directions_before;
+		do {
 		
-		
-		//HARD CASES
-		//---------
-		if (hard_cases_still2solve>0){
+			num_removed_before = hornMappings2Remove.size();
+			property_directions_before = survivingPropertyDirections();
 			
-			LogOutput.print("Solving hard cases...");
-			
-			hard_cases_still2solve=0;//we reinit
-			
-			dealWithHardCases=true;
-		
+			SAT.clear();
+			unsatClasses2repaired.clear();
+
 			init1 = Calendar.getInstance().getTimeInMillis();
+			useProjection=false;
+			dealWithHardCases=false;
 			
-			CheckSatisfiabilityOfIntegration_DandG(index.getIndividuaIdentifierSet());
+			setDowlingAndGallier(useProjection, mappings2repair, true); //we add indiv2classtypes
+			
+			
+			CheckSatisfiabilityOfIntegration_DandG_Individuals(index.getIndividuaIdentifierSet());
 			
 			SAT.addAll(SATvisited);
 				
+			LogOutput.print("UNSAT found: " + unSATvisited.size());
+			//LogOutput.print("SAT found: " + SATvisited.size());
+			
 			unSATvisited.clear(); //we need to clear structure
 			SATvisited.clear();
-	
-			LogOutput.print("REMAINING HARD CASES for all onto (2 Iter): " + hard_cases_still2solve);
+			
+			LogOutput.print("Remaining hard cases all onto (1 Iter): " + hard_cases_still2solve);
+			
 			
 			fin1 = Calendar.getInstance().getTimeInMillis();
-			LogOutput.print("Time ckecking satisfiability with D&G (Big projection, hard cases) (s): " + (float)((double)fin1-(double)init1)/1000.0);
+			LogOutput.print("\tTime ckecking satisfiability with D&G (Big projection, simple cases) (s): " + (float)((double)fin1-(double)init1)/1000.0);
 
-		}		
+			
+			
+			//HARD CASES
+			//---------
+			if (hard_cases_still2solve>0){
+				
+				LogOutput.print("Solving hard cases...");
+				
+				hard_cases_still2solve=0;//we reinit
+				
+				dealWithHardCases=true;
+			
+				init1 = Calendar.getInstance().getTimeInMillis();
+				
+				CheckSatisfiabilityOfIntegration_DandG(index.getIndividuaIdentifierSet());
+				
+				SAT.addAll(SATvisited);
+					
+				unSATvisited.clear(); //we need to clear structure
+				SATvisited.clear();
 		
+				LogOutput.print("REMAINING HARD CASES for all onto (2 Iter): " + hard_cases_still2solve);
+				
+				fin1 = Calendar.getInstance().getTimeInMillis();
+				LogOutput.print("Time ckecking satisfiability with D&G (Big projection, hard cases) (s): " + (float)((double)fin1-(double)init1)/1000.0);
+
+			}		
+			
+		} while (hornMappings2Remove.size()!=num_removed_before || !property_directions_before.equals(survivingPropertyDirections()));
+
 		//--------------------------------
 		//REMOVE MAPPINGS FROM STRUCTURES (individuals)
 		//---------------------------------
