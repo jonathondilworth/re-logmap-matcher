@@ -12,8 +12,8 @@ import uk.ac.ox.krr.logmap2.repair.hornSAT.Support;
  * is monotone in the filler and anti-monotone in the property; `≤n` is anti-monotone in
  * both and upward in the number; a self-edge is monotone in the property alone and holds
  * in both orientations (§7.8, the link HS3 needs). Property conditions are over signed
- * properties (§7.3a). Each link `r1 → r2` carries the union of the supports of its
- * property and filler conditions. One instance per property kind: the rules are the same
+ * property and filler conditions, and is emitted once for every minimal such union
+ * ({@link AlternativeSupports}). One instance per property kind: the rules are the same
  * over data properties, with data ranges as fillers.
  */
 final class SubsumptionLinkRules {
@@ -23,7 +23,8 @@ final class SubsumptionLinkRules {
     private final SupportedClosure properties;
     private final FillerRelations fillers;
 
-    SubsumptionLinkRules(RestrictionStore store, PropertyKind kind, SupportedClosure properties, FillerRelations fillers) {
+    SubsumptionLinkRules(RestrictionStore store, PropertyKind kind, SupportedClosure properties,
+            FillerRelations fillers) {
         this.store = store;
         this.kind = kind;
         this.properties = properties;
@@ -39,9 +40,9 @@ final class SubsumptionLinkRules {
                 if (from.equals(to)) {
                     continue;
                 }
-                Support support = linkSupport(from, to);
-                if (support != null) {
-                    links.add(HornInclusion.of(List.of(store.identifierOf(from)), store.identifierOf(to), support));
+                for (Support support : linkSupports(from, to).supports()) {
+                    links.add(HornInclusion.of(List.of(store.identifierOf(from)),
+                            store.identifierOf(to), support));
                 }
             }
         }
@@ -49,8 +50,8 @@ final class SubsumptionLinkRules {
         return links;
     }
 
-    /** The support under which `from ⊑ to`, or null when no rule gives it. */
-    private Support linkSupport(Restriction from, Restriction to) {
+    /** The supports under which `from ⊑ to`; none when no rule gives it. */
+    private AlternativeSupports linkSupports(Restriction from, Restriction to) {
         if (from.isExistential() && to.isExistential() && from.cardinality() >= to.cardinality()) {
             return s1(from, to);
         }
@@ -62,39 +63,37 @@ final class SubsumptionLinkRules {
             return s3(from, to);
         }
         if (from.kind() == RestrictionKind.SELF && to.kind() == RestrictionKind.SELF) {
-            return Support.least(subProperty(from.propertyToken(), to.propertyToken()),
-                    subProperty(SignedProperties.flip(from.propertyToken()), to.propertyToken()));
+            AlternativeSupports sameOrientation =
+                    subProperty(from.propertyToken(), to.propertyToken());
+            AlternativeSupports flipped =
+                    subProperty(SignedProperties.flip(from.propertyToken()), to.propertyToken());
+            return sameOrientation.or(flipped);
         }
-        return null;
+        return AlternativeSupports.NONE;
     }
 
-    /** S1: `≥n1 P1.F1 ⊑ ≥n2 P2.F2` when n1 ≥ n2, P1 ⊑p P2 and F1 ⊑c F2. */
-    private Support s1(Restriction from, Restriction to) {
-        return both(subProperty(from.propertyToken(), to.propertyToken()), subClass(from.filler(), to.filler()));
+    private AlternativeSupports s1(Restriction from, Restriction to) {
+        return subProperty(from.propertyToken(), to.propertyToken())
+                .and(subClass(from.filler(), to.filler()));
     }
 
     /** S2: `∀P1.F1 ⊑ ∀P2.F2` when P2 ⊑p P1 and F1 ⊑c F2 (fewer successors, a wider filler). */
-    private Support s2(Restriction from, Restriction to) {
-        return both(subProperty(to.propertyToken(), from.propertyToken()), subClass(from.filler(), to.filler()));
+    private AlternativeSupports s2(Restriction from, Restriction to) {
+        return subProperty(to.propertyToken(), from.propertyToken())
+                .and(subClass(from.filler(), to.filler()));
     }
 
     /** S3: `≤n1 P1.F1 ⊑ ≤n2 P2.F2` when n1 ≤ n2, P2 ⊑p P1 and F2 ⊑c F1 (fewer things to count). */
-    private Support s3(Restriction from, Restriction to) {
-        return both(subProperty(to.propertyToken(), from.propertyToken()), subClass(to.filler(), from.filler()));
+    private AlternativeSupports s3(Restriction from, Restriction to) {
+        return subProperty(to.propertyToken(), from.propertyToken())
+                .and(subClass(to.filler(), from.filler()));
     }
 
-    private static Support both(Support first, Support second) {
-        if (first == null || second == null) {
-            return null;
-        }
-        return first.with(second);
+    private AlternativeSupports subProperty(int subProperty, int superProperty) {
+        return properties.supportsOf(subProperty, superProperty);
     }
 
-    private Support subProperty(int subProperty, int superProperty) {
-        return properties.supportOf(subProperty, superProperty);
-    }
-
-    private Support subClass(int subFiller, int superFiller) {
+    private AlternativeSupports subClass(int subFiller, int superFiller) {
         return fillers.subsumption(subFiller, superFiller);
     }
 }

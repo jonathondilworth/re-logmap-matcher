@@ -26,6 +26,7 @@ import org.semanticweb.owlapi.model.IRI;
 import org.semanticweb.owlapi.model.OWLAxiom;
 import org.semanticweb.owlapi.model.OWLOntology;
 import org.semanticweb.owlapi.model.OWLOntologyManager;
+import org.semanticweb.owlapi.model.parameters.Imports;
 
 import uk.ac.ox.krr.logmap2.owlapi.SynchronizedOWLManager;
 
@@ -86,7 +87,10 @@ public class ReasonerManager {
 			OWLOntology m,
 			boolean useFactory) throws Exception{
 		
-		return getMergedOntologyReasoner(reasoner_id, onto1.getAxioms(), onto2.getAxioms(), m.getAxioms(), useFactory);
+		// return getMergedOntologyReasoner(reasoner_id, onto1.getAxioms(), onto2.getAxioms(), m.getAxioms(), useFactory);
+		
+		//the imports closure of both ontologies, as LogMap's index reads them
+		return getMergedOntologyReasoner(reasoner_id, onto1.getAxioms(Imports.INCLUDED), onto2.getAxioms(Imports.INCLUDED), m.getAxioms(), useFactory);
 				
 		
 	}

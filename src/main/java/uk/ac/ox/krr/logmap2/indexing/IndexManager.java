@@ -920,6 +920,18 @@ public abstract class IndexManager {
 		return identifier2ClassIndex.get(index).getIRI(getIRIStrOnto4Id(onto_id));		
 	}
 	
+
+	/**
+	 * The IRI of a class or of an individual: classes and individuals share one identifier space,
+	 * and the repair sweeps both
+	 */
+	public String getIRIStr4ClassOrIndividualIndex(int index){
+		if (identifier2ClassIndex.containsKey(index))
+			return getIRIStr4ConceptIndex(index);
+		return getIRIStr4IndividualIndex(index);
+	}
+
+	
 	public String getNameSpace4ConceptIndex(int index){		
 		
 		int onto_id = identifier2ClassIndex.get(index).getOntologyId();
@@ -1225,7 +1237,37 @@ public abstract class IndexManager {
 		return ident2equivalents;
 	}
 	
+
+	/**
+	 * A copy of every class's set of equivalent classes. Building the interval labelling index
+	 * on a set of mappings records each cycle those mappings close as equivalences here; a
+	 * caller that builds the index only to consult it takes this copy first and gives it back
+	 * with restoreEquivalentClasses, so that the repair does not read mapping-made equivalences
+	 * as facts of the ontologies.
+	 */
+	public Map<Integer,Set<Integer>> copyEquivalentClasses(){
+		
+		Map<Integer,Set<Integer>> copy = new HashMap<Integer,Set<Integer>>();
+		
+		for (int ident : identifier2ClassIndex.keySet()){
+			Set<Integer> equivalents = identifier2ClassIndex.get(ident).getEquivalentClasses();
+			copy.put(ident, equivalents==null ? null : new HashSet<Integer>(equivalents));
+		}
+		
+		return copy;
+	}
 	
+	
+	public void restoreEquivalentClasses(Map<Integer,Set<Integer>> copy){
+		
+		for (int ident : copy.keySet()){
+			identifier2ClassIndex.get(ident).setEquivalentClasses(copy.get(ident));
+		}
+		
+		ident2equivalents.clear();
+	}
+	
+
 	
 	private Map<Integer,Set<Integer>> ident2subclasses_module = new HashMap<Integer,Set<Integer>>();
 	

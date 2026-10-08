@@ -194,14 +194,32 @@ public class LogMap2_CommandLine {
 				
 				readermanager = new MappingsReaderManager(input_mappings_path, format_mappings);
 				
-				new LogMap2_RepairFacility(
-						loader1.getOWLOntology(), 
-						loader2.getOWLOntology(), 
-						readermanager.getMappingObjects(),
-						overlapping,
-						true, //always optimal
-						satisfiability_check,
-						output_path +  "/" + "mappings_repaired_with_LogMap");
+				// new LogMap2_RepairFacility(
+				// 		loader1.getOWLOntology(), 
+				// 		loader2.getOWLOntology(), 
+				// 		readermanager.getMappingObjects(),
+				// 		overlapping,
+				// 		// true, //always optimal //the cleaning mode comes from facility_parameters.txt (two-step without the file)
+				// 		satisfiability_check,
+				// 		output_path +  "/" + "mappings_repaired_with_LogMap");
+
+				LogMap2_RepairFacility facility = new LogMap2_RepairFacility(
+					loader1.getOWLOntology(), 
+					loader2.getOWLOntology(), 
+					readermanager.getMappingObjects(),
+					overlapping,
+					satisfiability_check,
+					output_path +  "/" + "mappings_repaired_with_LogMap");
+
+				if (facility.hasFailed()){
+					//Exit non-zero rather than report success, and say whether the output was written
+					//(a failure of the optional final check comes after the files)
+					if (facility.hasKeptMappings())
+						System.err.println("The repair finished and its output was written, but the final check failed: " + facility.getFailure());
+					else
+						System.err.println("The repair failed and no output was written: " + facility.getFailure());
+					System.exit(1);
+				}
 				
 				
 				

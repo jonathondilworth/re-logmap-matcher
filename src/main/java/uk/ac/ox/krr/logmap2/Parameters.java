@@ -9,7 +9,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.HashSet;
+import java.util.List;
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
 
 public class Parameters {
 	
@@ -138,6 +141,15 @@ public class Parameters {
 	
 	public static int good_ambiguity = 2;
 	
+	//Restriction-aware repair: how many alternative supports a derived clause is kept under
+	// public static int max_alternative_supports = 8;
+	private static final int default_max_alternative_supports = 8;
+	public static int max_alternative_supports = default_max_alternative_supports;
+
+	//Repair facility: two-step cleaning (reliable equivalences repaired and fixed first) or one step
+	private static final boolean default_two_step_cleaning = true;
+	public static boolean two_step_cleaning = default_two_step_cleaning;
+
 	//Note that even if overlapping is set to true. It will only applied for big ontologies >15000 
 	public static boolean use_overlapping = false;
 	
@@ -166,13 +178,17 @@ public class Parameters {
 	public static boolean index_undeclared_abox_use_both_props = true;
 
 	//TODO Now with ignore types it may be solved this issue!
-	public static boolean reason_datatypes = true; //with OM client gives error if true
+	// public static boolean reason_datatypes = true; //with OM client gives error if true
+	private static final boolean default_reason_datatypes = true;
+	public static boolean reason_datatypes = default_reason_datatypes; //with OM client gives error if true
 	
 	public static String structural = "Structural";
 	public static String hermit = "HermiT";
 	//public static String more = "MORe";
 	public static String elk = "ELK";
-	public static String reasoner = hermit;
+	// public static String reasoner = hermit;
+	private static final String default_reasoner = hermit;
+	public static String reasoner = default_reasoner;
 	//public static String reasoner = more;
 	//public static String reasoner = structural;  //it was the default
 	//public static String reasoner = elk;
@@ -269,6 +285,12 @@ public class Parameters {
 	private static final String max_ambiguity_str = "max_ambiguity";
 	
 	private static final String good_ambiguity_str = "good_ambiguity";
+
+	private static final String max_alternative_supports_str = "max_alternative_supports";
+
+	private static final String two_step_cleaning_str = "two_step_cleaning";
+
+	private static final String facility_parameters_file = "facility_parameters.txt";
 	 
 	private static final String use_overlapping_str = "use_overlapping";
 	
@@ -558,6 +580,9 @@ public class Parameters {
 				else if (elements[0].equals(good_ambiguity_str)){
 					good_ambiguity = Integer.valueOf(elements[1]);
 				}
+				else if (elements[0].equals(max_alternative_supports_str)){
+					max_alternative_supports = Integer.valueOf(elements[1]);
+				}
 				else if (elements[0].equals(use_overlapping_str)){
 					use_overlapping = Boolean.valueOf(elements[1]);
 				}
@@ -743,6 +768,136 @@ public class Parameters {
 		
 	}
 
+	
+	
+	public static void readFacilityParameters(){
+		readFacilityParameters("");
+	}
+	
+	/**
+	 * The repair facility's own settings (two_step_cleaning, max_alternative_supports, reasoner,
+	 * reason_datatypes), read from facility_parameters.txt in the given directory: the working
+	 * directory when it is empty, with or without a trailing separator otherwise. All start from their defaults; without
+	 * the file they stay there; a value that cannot be read puts its setting back there, and a line
+	 * that is not key|value (a blank line and a # comment apart) or names no setting is skipped. Each case is said on the error stream,
+	 * as readParameters does for its file. parameters.txt is not read
+	 */
+	public static void readFacilityParameters(String directory){
+		
+		two_step_cleaning = default_two_step_cleaning;
+		max_alternative_supports = default_max_alternative_supports;
+		reasoner = default_reasoner;
+		reason_datatypes = default_reason_datatypes;
+		
+		File file = directory.isEmpty() ? new File(facility_parameters_file) : new File(directory, facility_parameters_file);
+		
+		if (!file.isFile()){
+			LOGGER.info("Using default repair facility parameters");
+			System.err.println("File '" + file.getPath() + "' is not available. Using default repair facility parameters.");
+			return;
+		}
+		
+		LOGGER.info("Reading repair facility parameters from file.");
+		
+		//Not ReadFile: it swallows the failure to open and then reads "" without end
+		List<String> lines;
+		try{
+			lines = Files.readAllLines(file.toPath());
+		}
+		catch (IOException e){
+			System.err.println("Cannot read '" + file.getPath() + "' (" + e.getLocalizedMessage() + "). Using default repair facility parameters.");
+			return;
+		}
+		
+		for (String line : lines){
+			// if (line.startsWith("#") || line.indexOf("|")<0){
+			if (line.isBlank() || line.startsWith("#")){
+				continue;
+			}
+			readFacilityParameter(line);
+		}
+		
+	}
+	
+	
+	//A line is a key, one '|' and a value; any other shape or an unknown key is named and skipped, a value that cannot be read is named and leaves its setting at the default
+	private static void readFacilityParameter(String line){
+		
+		String[] elements = line.split("\\|", -1);
+		
+		if (elements.length != 2 || elements[0].trim().isEmpty()){
+			System.err.println("Cannot read the repair facility parameter line '" + line + "' (a line is key|value). Ignored.");
+			return;
+		}
+		
+		String key = elements[0].trim();
+		String value = elements[1].trim();
+		
+		try{
+			if (key.equals(two_step_cleaning_str)){
+				two_step_cleaning = trueOrFalse(value);
+			}
+			else if (key.equals(max_alternative_supports_str)){
+				max_alternative_supports = atLeastOne(value);
+			}
+			else if (key.equals(reasoner_str)){
+				reasoner = knownReasoner(value);
+			}
+			else if (key.equals(reason_datatypes_str)){
+				reason_datatypes = trueOrFalse(value);
+			}
+			else {
+				System.err.println("Unknown repair facility parameter, ignored: '" + line + "'.");
+			}
+		}
+		catch (RuntimeException e){
+			restoreFacilityDefault(key);
+			System.err.println("Cannot read the repair facility parameter line '" + line + "' (" + e.getLocalizedMessage() + "). Using its default.");
+		}
+		
+	}
+	
+	
+	//An earlier line may have set it: the default is what the message promises
+	private static void restoreFacilityDefault(String key){
+		if (key.equals(two_step_cleaning_str))
+			two_step_cleaning = default_two_step_cleaning;
+		else if (key.equals(max_alternative_supports_str))
+			max_alternative_supports = default_max_alternative_supports;
+		else if (key.equals(reasoner_str))
+			reasoner = default_reasoner;
+		else if (key.equals(reason_datatypes_str))
+			reason_datatypes = default_reason_datatypes;
+	}
+	
+	
+	//Boolean.parseBoolean would read anything but "true" as false, silently
+	private static boolean trueOrFalse(String value){
+		if (value.equalsIgnoreCase("true"))
+			return true;
+		if (value.equalsIgnoreCase("false"))
+			return false;
+		throw new IllegalArgumentException("'" + value + "' is neither true nor false");
+	}
+	
+	
+	//A bound below one would be refused at the first build (AlternativeSupports); better here
+	private static int atLeastOne(String value){
+		int bound = Integer.parseInt(value);
+		if (bound < 1)
+			throw new IllegalArgumentException(bound + " is below one");
+		return bound;
+	}
+	
+	
+	//The three OntologyProcessing.setTaxonomicData chooses between; readParameters would take any string
+	private static String knownReasoner(String value){
+		for (String known : new String[]{hermit, structural, elk}){
+			if (value.equalsIgnoreCase(known))
+				return known;
+		}
+		throw new IllegalArgumentException("'" + value + "' is not " + hermit + ", " + structural + " or " + elk);
+	}
 
 	public static boolean isRestrictInstanceTypesActive() {
 		return restrict_instance_types;

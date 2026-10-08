@@ -28,10 +28,6 @@ public record CorrespondenceDirection(Kind kind, int origin, int target) impleme
         return new CorrespondenceDirection(Kind.DATA_PROPERTY, origin, target);
     }
 
-    public boolean isProperty() {
-        return kind != Kind.CLASS;
-    }
-
     @Override
     public int compareTo(CorrespondenceDirection other) {
         if (kind != other.kind) {
@@ -45,6 +41,11 @@ public record CorrespondenceDirection(Kind kind, int origin, int target) impleme
 
     @Override
     public String toString() {
-        return (kind == Kind.CLASS ? "" : kind == Kind.OBJECT_PROPERTY ? "property " : "data property ") + origin + " -> " + target;
+        String kindName = switch (kind) {
+            case CLASS -> "";
+            case OBJECT_PROPERTY -> "property ";
+            case DATA_PROPERTY -> "data property ";
+        };
+        return kindName + origin + " -> " + target;
     }
 }

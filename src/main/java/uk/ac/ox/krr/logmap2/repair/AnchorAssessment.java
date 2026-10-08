@@ -93,7 +93,8 @@ public class AnchorAssessment {
 	
 	private Map<Integer, Boolean> unsatClasses2repaired;
 
-	/**Classes unsatisfiable with no correspondence to blame: reported, never repaired*/
+	// /**Classes unsatisfiable with no correspondence to blame: reported, never repaired*/
+	/**Classes unsatisfiable, and individuals inconsistent, with no correspondence under repair to blame: reported, never repaired; one set per repair call*/
 	private Set<Integer> preexistingIncoherence = new HashSet<Integer>();
 
 		
@@ -526,58 +527,77 @@ public class AnchorAssessment {
 		//---------------------------------------
 		LogOutput.print("\n\nALL ONTOLOGY");
 		LogOutput.print("-------------------------");
-		init1 = Calendar.getInstance().getTimeInMillis();
-		useProjection=false;
-		dealWithHardCases=false;
-		
-		setDowlingAndGallier(useProjection, mappings2repair);
-		
-		
-		//LogOutput.print("Repairing from Roots: " + index.getRootIdentifiers().size());
-		CheckSatisfiabilityOfIntegration_DandG(index.getRootIdentifiers());
-		
-		SAT.addAll(SATvisited);
-			
-		LogOutput.print("UNSAT found: " + unSATvisited.size());
-		//LogOutput.print("SAT found: " + SATvisited.size());
-		
-		unSATvisited.clear(); //we need to clear structure
-		SATvisited.clear();
-		
-		LogOutput.print("Remaining hard cases all onto (1 Iter): " + hard_cases_still2solve);
-		
-		
-		fin1 = Calendar.getInstance().getTimeInMillis();
-		LogOutput.print("\tTime ckecking satisfiability with D&G (Big projection, simple cases) (s): " + (float)((double)fin1-(double)init1)/1000.0);
 
 		
-		
-		//HARD CASES
-		//---------
-		if (hard_cases_still2solve>0){
+		//Every class is tested here, also those repaired on the small projection: a plan accepted
+		//there need not hold on the whole ontology. And the stage is repeated, on a theory built
+		//again from what is left, for as long as it removes something: a plan that masked the
+		//supports a restriction clause was given need not have broken every way that clause holds
+		int num_removed_before;
+		List<CorrespondenceDirection> property_directions_before;
+		do {
 			
-			LogOutput.print("Solving hard cases...");
+			num_removed_before = hornMappings2Remove.size();
+			property_directions_before = survivingPropertyDirections();
 			
-			hard_cases_still2solve=0;//we reinit
+			SAT.clear();
+			unsatClasses2repaired.clear();
 			
-			dealWithHardCases=true;
-		
+
 			init1 = Calendar.getInstance().getTimeInMillis();
+			useProjection=false;
+			dealWithHardCases=false;
 			
+			setDowlingAndGallier(useProjection, mappings2repair);
+			
+			
+			//LogOutput.print("Repairing from Roots: " + index.getRootIdentifiers().size());
 			CheckSatisfiabilityOfIntegration_DandG(index.getRootIdentifiers());
 			
 			SAT.addAll(SATvisited);
 				
+			LogOutput.print("UNSAT found: " + unSATvisited.size());
+			//LogOutput.print("SAT found: " + SATvisited.size());
+			
 			unSATvisited.clear(); //we need to clear structure
 			SATvisited.clear();
-	
-			LogOutput.print("REMAINING HARD CASES for all onto (2 Iter): " + hard_cases_still2solve);
+			
+			LogOutput.print("Remaining hard cases all onto (1 Iter): " + hard_cases_still2solve);
+			
 			
 			fin1 = Calendar.getInstance().getTimeInMillis();
-			LogOutput.print("Time ckecking satisfiability with D&G (Big projection, hard cases) (s): " + (float)((double)fin1-(double)init1)/1000.0);
+			LogOutput.print("\tTime ckecking satisfiability with D&G (Big projection, simple cases) (s): " + (float)((double)fin1-(double)init1)/1000.0);
 
-		}		
+			
+			
+			//HARD CASES
+			//---------
+			if (hard_cases_still2solve>0){
+				
+				LogOutput.print("Solving hard cases...");
+				
+				hard_cases_still2solve=0;//we reinit
+				
+				dealWithHardCases=true;
+			
+				init1 = Calendar.getInstance().getTimeInMillis();
+				
+				CheckSatisfiabilityOfIntegration_DandG(index.getRootIdentifiers());
+				
+				SAT.addAll(SATvisited);
+					
+				unSATvisited.clear(); //we need to clear structure
+				SATvisited.clear();
 		
+				LogOutput.print("REMAINING HARD CASES for all onto (2 Iter): " + hard_cases_still2solve);
+				
+				fin1 = Calendar.getInstance().getTimeInMillis();
+				LogOutput.print("Time ckecking satisfiability with D&G (Big projection, hard cases) (s): " + (float)((double)fin1-(double)init1)/1000.0);
+
+			}		
+			
+		} while (hornMappings2Remove.size()!=num_removed_before || !property_directions_before.equals(survivingPropertyDirections()));
+
 		//--------------------------------
 		//REMOVE MAPPINGS FROM STRUCTURES
 		//---------------------------------
@@ -659,10 +679,15 @@ public class AnchorAssessment {
 				completeSetOfConflictiveMappings(cls, dgSat.getConflictiveMappings());  
 				
 				//No correspondence to blame: the input ontologies are incoherent on their own here
+				//No correspondence under repair to blame: the input ontologies are incoherent on their
+				//own here, or the conflict runs through fixed correspondences alone
 				if (dgSat.getConflictiveMappings().isEmpty()){
 					if (preexistingIncoherence.add(cls)){
-						LogOutput.printAlways("Pre-existing incoherence: " + index.getIRIStr4ConceptIndex(cls)
-								+ " is unsatisfiable without any correspondence; not repaired");
+						// LogOutput.printAlways("Pre-existing incoherence: " + index.getIRIStr4ConceptIndex(cls)
+								// + " is unsatisfiable without any correspondence; not repaired");
+						
+						LogOutput.printAlways("Pre-existing incoherence: " + index.getIRIStr4ClassOrIndividualIndex(cls)
+							+ " is unsatisfiable without any correspondence under repair; not repaired");
 					}
 					continue;
 				}
@@ -774,57 +799,77 @@ public class AnchorAssessment {
 		//---------------------------------------
 		LogOutput.print("\n\nALL ONTOLOGY");
 		LogOutput.print("-------------------------");
-		init1 = Calendar.getInstance().getTimeInMillis();
-		useProjection=false;
-		dealWithHardCases=false;
-		
-		setDowlingAndGallier(useProjection, mappings2repair, true); //we add indiv2classtypes
-		
-		
-		CheckSatisfiabilityOfIntegration_DandG_Individuals(index.getIndividuaIdentifierSet());
-		
-		SAT.addAll(SATvisited);
-			
-		LogOutput.print("UNSAT found: " + unSATvisited.size());
-		//LogOutput.print("SAT found: " + SATvisited.size());
-		
-		unSATvisited.clear(); //we need to clear structure
-		SATvisited.clear();
-		
-		LogOutput.print("Remaining hard cases all onto (1 Iter): " + hard_cases_still2solve);
-		
-		
-		fin1 = Calendar.getInstance().getTimeInMillis();
-		LogOutput.print("\tTime ckecking satisfiability with D&G (Big projection, simple cases) (s): " + (float)((double)fin1-(double)init1)/1000.0);
 
+		//Repeated as the class stage is, on a theory built again from what is left, for as long
+		//as it removes something: the theory holds a restriction clause under a bounded number of
+		//supports, and a plan that masked those need not have broken every way the clause holds
+		int num_removed_before;
+		List<CorrespondenceDirection> property_directions_before;
+		do {
 		
-		
-		//HARD CASES
-		//---------
-		if (hard_cases_still2solve>0){
+			num_removed_before = hornMappings2Remove.size();
+			property_directions_before = survivingPropertyDirections();
 			
-			LogOutput.print("Solving hard cases...");
-			
-			hard_cases_still2solve=0;//we reinit
-			
-			dealWithHardCases=true;
-		
+			SAT.clear();
+			unsatClasses2repaired.clear();
+
 			init1 = Calendar.getInstance().getTimeInMillis();
+			useProjection=false;
+			dealWithHardCases=false;
 			
-			CheckSatisfiabilityOfIntegration_DandG(index.getIndividuaIdentifierSet());
+			setDowlingAndGallier(useProjection, mappings2repair, true); //we add indiv2classtypes
+			
+			
+			CheckSatisfiabilityOfIntegration_DandG_Individuals(index.getIndividuaIdentifierSet());
 			
 			SAT.addAll(SATvisited);
 				
+			LogOutput.print("UNSAT found: " + unSATvisited.size());
+			//LogOutput.print("SAT found: " + SATvisited.size());
+			
 			unSATvisited.clear(); //we need to clear structure
 			SATvisited.clear();
-	
-			LogOutput.print("REMAINING HARD CASES for all onto (2 Iter): " + hard_cases_still2solve);
+			
+			LogOutput.print("Remaining hard cases all onto (1 Iter): " + hard_cases_still2solve);
+			
 			
 			fin1 = Calendar.getInstance().getTimeInMillis();
-			LogOutput.print("Time ckecking satisfiability with D&G (Big projection, hard cases) (s): " + (float)((double)fin1-(double)init1)/1000.0);
+			LogOutput.print("\tTime ckecking satisfiability with D&G (Big projection, simple cases) (s): " + (float)((double)fin1-(double)init1)/1000.0);
 
-		}		
+			
+			
+			//HARD CASES
+			//---------
+			if (hard_cases_still2solve>0){
+				
+				LogOutput.print("Solving hard cases...");
+				
+				hard_cases_still2solve=0;//we reinit
+				
+				dealWithHardCases=true;
+			
+				init1 = Calendar.getInstance().getTimeInMillis();
+				
+				// CheckSatisfiabilityOfIntegration_DandG(index.getIndividuaIdentifierSet());
+
+				//Through the individuals' sweep, as the first pass: the class sweep would ask an individual
+				//for subclasses and name it as a class
+				CheckSatisfiabilityOfIntegration_DandG_Individuals(index.getIndividuaIdentifierSet());
+				
+				SAT.addAll(SATvisited);
+					
+				unSATvisited.clear(); //we need to clear structure
+				SATvisited.clear();
 		
+				LogOutput.print("REMAINING HARD CASES for all onto (2 Iter): " + hard_cases_still2solve);
+				
+				fin1 = Calendar.getInstance().getTimeInMillis();
+				LogOutput.print("Time ckecking satisfiability with D&G (Big projection, hard cases) (s): " + (float)((double)fin1-(double)init1)/1000.0);
+
+			}		
+			
+		} while (hornMappings2Remove.size()!=num_removed_before || !property_directions_before.equals(survivingPropertyDirections()));
+
 		//--------------------------------
 		//REMOVE MAPPINGS FROM STRUCTURES (individuals)
 		//---------------------------------
@@ -893,7 +938,16 @@ public class AnchorAssessment {
 				
 				//In some cases there are side effecte between mappings and we need to collect more mappings
 				completeSetOfConflictiveMappings(indiv, dgSat.getConflictiveMappings());  
-				
+
+				//No correspondence under repair to blame: the individual is inconsistent on its own or
+				//through fixed correspondences alone; reported as the class sweep reports a class
+				if (dgSat.getConflictiveMappings().isEmpty()){
+					if (preexistingIncoherence.add(indiv)){
+						LogOutput.printAlways("Pre-existing inconsistency: " + index.getIRIStr4ClassOrIndividualIndex(indiv)
+								+ " is inconsistent without any correspondence under repair; not repaired");
+					}
+					continue;
+				}
 					
 				unsatClasses2conflictiveMappings.put(indiv, new HashSet<HornClause>(dgSat.getConflictiveMappings()));
 										
@@ -1062,6 +1116,10 @@ public class AnchorAssessment {
 				
 				LogOutput.print("Case with more erroneous mappings! " + entity + "  " + dgSat.getConflictiveMappings().size());
 				
+				//The given set is the one that grows below, so its size is taken first
+				int num_mappings2ignore = mappings2ignore.size();
+				
+
 				//We add new mappings in error
 				dgSat.incrementConflictiveMappingsWithNewInvolvedMappings();
 				
@@ -1069,7 +1127,7 @@ public class AnchorAssessment {
 				
 				//We check again				
 				//Review this stop condition....
-				if (dgSat.getConflictiveMappings().size()!=mappings2ignore.size() && dgSat.getConflictiveMappings().size()>0){
+				if (dgSat.getConflictiveMappings().size()!=num_mappings2ignore && dgSat.getConflictiveMappings().size()>0){
 					completeSetOfConflictiveMappings(entity, dgSat.getConflictiveMappings());
 				}
 				else{

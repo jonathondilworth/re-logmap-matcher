@@ -1031,11 +1031,15 @@ public class LogMap2Core {
 		// round, so that the restriction rules see them during every round and no judgement after
 		// the repair can undo a repair decision. The admission's disjointness test reads the
 		// interval labelling index, which is therefore built on the raw class anchors first.
+		//Building it records the cycles those anchors close as class equivalences; they are
+		//taken back afterwards, or the repair could not mask them.
 		if (Parameters.perform_property_matching){
+			Map<Integer, Set<Integer>> equivalences_before_admission = index.copyEquivalentClasses();
 			index.setIntervalLabellingIndex(mapping_extractor.getLogMapMappings());
 			index.clearAuxStructuresforLabellingSchema();
 			mapping_extractor.createObjectPropertyAnchors();
 			mapping_extractor.createDataPropertyAnchors();
+			index.restoreEquivalentClasses(equivalences_before_admission);
 		}
 		
 		

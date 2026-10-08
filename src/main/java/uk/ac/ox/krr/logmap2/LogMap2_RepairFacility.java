@@ -87,7 +87,54 @@ public class LogMap2_RepairFacility {
 		this(onto1, onto2, mappings, false, false, sat_check, "");
 	}
 	
+
+	/**
+	 * Constructor without a cleaning mode: the mode, the bound on alternative supports and the
+	 * indexing reasoner are read from facility_parameters.txt in the working directory (the defaults
+	 * without it). The command line's DEBUGGER mode invokes this one; a caller that passes the mode is
+	 * believed and reads no file
+	 * @param onto1
+	 * @param onto2
+	 * @param mappings
+	 * @param overlapping If the intersection or overlapping of the ontologies are extracted before the repair
+	 * @param chechSatisfiability
+	 * @param outPutFileName
+	 */
+	public LogMap2_RepairFacility(
+			OWLOntology onto1,
+			OWLOntology onto2, 
+			Set<MappingObjectStr> mappings, 
+			boolean overlapping, 
+			boolean chechSatisfiability,
+			String outPutFileName){
+		this(onto1, onto2, mappings, overlapping, chechSatisfiability, outPutFileName, "");
+	}
 	
+	
+	/**
+	 * As above, with the directory that holds facility_parameters.txt ("" for the working directory)
+	 */
+	public LogMap2_RepairFacility(
+			OWLOntology onto1,
+			OWLOntology onto2, 
+			Set<MappingObjectStr> mappings, 
+			boolean overlapping, 
+			boolean chechSatisfiability,
+			String outPutFileName,
+			String settingsDirectory){
+		this(onto1, onto2, mappings, overlapping, twoStepCleaningFromFacilityParameters(settingsDirectory), false, chechSatisfiability, outPutFileName);
+	}
+	
+	
+	//Evaluated before the constructor it is an argument of: the settings are read before the indexing and the first build
+	private static boolean twoStepCleaningFromFacilityParameters(String settingsDirectory){
+		Parameters.readFacilityParameters(settingsDirectory);
+		return Parameters.two_step_cleaning;
+	}
+	
+	
+	
+
 	
 	/**
 	 * Constructor from Java application
@@ -165,6 +212,7 @@ public class LogMap2_RepairFacility {
 			
 			//Always... at least for testing
 			keepRepairedMappings();
+			mappings_kept = true;
 			
 			
 			if (!outPutFileName.equals("")){
@@ -182,11 +230,44 @@ public class LogMap2_RepairFacility {
 		
 		}
 		catch (Exception e){
+			//The failure is recorded and shown, and the command line exits non-zero; the result is empty
+			//when the failure came before the mappings were kept (hasKeptMappings says)
 			System.out.println("Error repairing mappings using LogMap repair module: " + e.getMessage());
+			e.printStackTrace();
 		}
 		
 		
 	}
+	
+
+	/**The exception that ended the repair, if one did. Before the mappings were kept it leaves the result
+	 * empty; after that (the optional final satisfiability check) the mappings and the files are there*/
+	private Exception repair_failure;
+	
+	/**Set once the repaired mappings are kept: after that only the save (which catches its own errors)
+	 * and the optional final satisfiability check run*/
+	private boolean mappings_kept = false;
+	
+	public boolean hasFailed(){
+		return repair_failure!=null;
+	}
+	
+	public Exception getFailure(){
+		return repair_failure;
+	}
+	
+	public boolean hasKeptMappings(){
+		return mappings_kept;
+	}
+	
+	
+	/**Everything the repair calls of this facility reported as incoherent on its own (each call reports anew)*/
+	private Set<Integer> preexisting_incoherence = new HashSet<Integer>();
+	
+	private void collectPreexistingIncoherence(){
+		preexisting_incoherence.addAll(mapping_assessment.getPreexistingIncoherence());
+	}
+	
 	
 	
 	
@@ -384,6 +465,16 @@ public class LogMap2_RepairFacility {
 			
 			//System.out.println(map + "   " + map.getConfidence());
 			
+			//A cell flagged with "?" (in OAEI reference alignments: not to be counted) is left out of
+			//the repair and of its result, whatever its type. Stock read a flagged class cell as ">"
+			//and a flagged property cell as "=". Carrying flagged cells through to the output is a
+			//possible later change (docs/DECISIONS.md, 2 October 2026, review finding F-007)
+			if (map.getMappingDirection()==Utilities.Flagged) {
+				num_flagged_mappings++;
+				continue;
+			}
+			
+
 			if (map.getTypeOfMapping()==Utilities.CLASSES) {
 				
 				addClassMapping(map);
@@ -418,6 +509,8 @@ public class LogMap2_RepairFacility {
 		
 		LogOutput.print("Numb of reliable mappings: " + num_anchors);
 		LogOutput.print("Numb of other mappings: " + num_mappings2review);
+		if (num_flagged_mappings>0)
+			LogOutput.printAlways("Flagged mappings ('?') left out of the repair: " + num_flagged_mappings);
 		
 		
 		
@@ -513,13 +606,16 @@ public class LogMap2_RepairFacility {
 		// Assess Property mappings: using index. Before the class repair, so that the repair sees the
 		// admitted property mappings and nothing deletes one behind the repair's back afterwards. The
 		// assessment's disjointness test reads the interval labelling index, built here on the input
-		// class mappings first
+		//class mappings first. Building it records the cycles those mappings close as class
+		//equivalences; they are taken back afterwards, or the repair could not mask them
 		if (mapping_manager.getDataPropertyAnchors().size() >0 || mapping_manager.getObjectPropertyAnchors().size() > 0) {
+			Map<Integer, Set<Integer>> equivalences_before_admission = index.copyEquivalentClasses();
 			index.setIntervalLabellingIndex(mapping_manager.getLogMapMappings());
 			index.clearAuxStructuresforLabellingSchema();
 			init = Calendar.getInstance().getTimeInMillis();
 			mapping_manager.evaluateCompatibilityDataPropertyMappings();
 			mapping_manager.evaluateCompatibilityObjectPropertyMappings();
+			index.restoreEquivalentClasses(equivalences_before_admission);
 			fin = Calendar.getInstance().getTimeInMillis();
 			LogOutput.print("\tTime assessing property mappings (s): " + (float)((double)fin-(double)init)/1000.0);		
 		}
@@ -562,6 +658,7 @@ public class LogMap2_RepairFacility {
 				//We have an specific method since there is not a top-down search. And we first repair classes
 				mapping_assessment.CheckSatisfiabilityOfIntegration_DandG_Individuals(
 						mapping_manager.getInstanceMappings());
+				collectPreexistingIncoherence();
 				
 				fin = Calendar.getInstance().getTimeInMillis();
 				LogOutput.print("Time cleaning instance mappings D&G (s): " + (float)((double)fin-(double)init)/1000.0);
@@ -599,6 +696,7 @@ public class LogMap2_RepairFacility {
 			mapping_assessment.CountSatisfiabilityOfIntegration_DandG(mapping_manager.getLogMapMappings());
 		}
 		mapping_assessment.CheckSatisfiabilityOfIntegration_DandG(mapping_manager.getLogMapMappings());
+		collectPreexistingIncoherence();
 		fin = Calendar.getInstance().getTimeInMillis();
 		LogOutput.print("\tTime cleaning reliable class mappings Dowling and Gallier (s): " + (float)((double)fin-(double)init)/1000.0);
 		LogOutput.print("\tRepaired Root Unsat using Dowling and Gallier (aproximation): " + mapping_assessment.getNumRepairedUnsatClasses());
@@ -647,10 +745,17 @@ public class LogMap2_RepairFacility {
 		if (mapping_manager.getMappings2Review().size()>0){
 		
 			mapping_manager.setExactAsFixed(false);//repair all, just in case...
+			//The reliable mappings stay fixed, as in LogMap2Core's candidate rounds: the second check
+			//then sees them, as facts, beside the mappings under review. Without them a restriction
+			//conflict that needs a mapping of each group was never found
 			
 			//Clean D&G mappings 2 review
 			init = Calendar.getInstance().getTimeInMillis();
+			if (Parameters.extractGlobal_D_G_Info){
+				mapping_assessment.CountSatisfiabilityOfIntegration_DandG(mapping_manager.getMappings2Review());
+			}
 			mapping_assessment.CheckSatisfiabilityOfIntegration_DandG(mapping_manager.getMappings2Review());  //With Fixed mappings!
+			collectPreexistingIncoherence();
 			fin = Calendar.getInstance().getTimeInMillis();
 			LogOutput.print("Time cleaning rest of the mappings using D&G (s): " + (float)((double)fin-(double)init)/1000.0);
 			LogOutput.print("\tRepaired Root Unsat using Dowling and Gallier 2 (aproximation): " + mapping_assessment.getNumRepairedUnsatClasses());
@@ -730,6 +835,7 @@ public class LogMap2_RepairFacility {
 			mapping_assessment.CountSatisfiabilityOfIntegration_DandG(mapping_manager.getLogMapMappings());
 		}
 		mapping_assessment.CheckSatisfiabilityOfIntegration_DandG(mapping_manager.getLogMapMappings());
+		collectPreexistingIncoherence();
 		fin = Calendar.getInstance().getTimeInMillis();
 		LogOutput.print("\tTime cleaning class mappings Dowling and Gallier (s): " + (float)((double)fin-(double)init)/1000.0);
 		LogOutput.print("\tRepaired Root Unsat using Dowling and Gallier (aproximation): " + mapping_assessment.getNumRepairedUnsatClasses());
@@ -771,6 +877,7 @@ public class LogMap2_RepairFacility {
 	
 	int num_anchors=0;
 	int num_mappings2review=0;
+	int num_flagged_mappings=0;
 	
 	
 	/**
@@ -829,6 +936,13 @@ public class LogMap2_RepairFacility {
 			}
 			else if (map.getMappingDirection()==Utilities.L2R){	
 				addSubMapping2Mappings2Review(ide1, ide2);
+				num_mappings2review++;
+			}
+			else if (map.getMappingDirection()==Utilities.EQ){
+				//An equivalence that is not reliable is reviewed in both directions. It used to fall
+				//into the branch below and came out as its right-to-left direction alone
+				addSubMapping2Mappings2Review(ide1, ide2);
+				addSubMapping2Mappings2Review(ide2, ide1);
 				num_mappings2review++;
 			}
 			else{
@@ -1199,13 +1313,16 @@ public class LogMap2_RepairFacility {
 	}
 
 	/**
-	 * Returns the IRIs of the classes found unsatisfiable without any correspondence to blame (not repaired)
+	 * Returns the IRIs of the classes found unsatisfiable, and of the individuals found inconsistent,
+	 * without any correspondence under repair to blame (not repaired), over every repair call of this facility
 	 * @return
 	 */
 	public Set<String> getPreexistingIncoherence(){
 		Set<String> iris = new HashSet<String>();
-		for (int ide : mapping_assessment.getPreexistingIncoherence()){
-			iris.add(index.getIRIStr4ConceptIndex(ide));
+		// for (int ide : mapping_assessment.getPreexistingIncoherence()){
+		// 	iris.add(index.getIRIStr4ConceptIndex(ide));
+		for (int ide : preexisting_incoherence){
+			iris.add(index.getIRIStr4ClassOrIndividualIndex(ide));
 		}
 		return iris;
 	}

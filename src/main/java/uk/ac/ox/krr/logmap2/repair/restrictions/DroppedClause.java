@@ -1,7 +1,8 @@
 package uk.ac.ox.krr.logmap2.repair.restrictions;
 
 /**
- * A normalised clause or axiom the store did not use, with the reason. Every drop is a
+ * A normalised clause or axiom the store did not use, or an axiom the normaliser itself
+ * rejected, with the reason. Every drop is a
  * sound omission: the theory handed to Dowling–Gallier is weaker, never wrong. The report
  * of these is what tells a reader how much of an ontology the repair sees.
  */
@@ -19,7 +20,10 @@ public record DroppedClause(Reason reason, String description) {
         DISJOINT_PROPERTIES("disjoint properties"),
         KEY("a key"),
         COMPLEMENT_FILLER("a cardinality over a complemented filler"),
-        UNKNOWN_ENTITY("an entity the index does not know");
+        UNREPRESENTABLE_CARDINALITY("an at-most of " + Integer.MAX_VALUE + " whose dual at-least cannot be represented as an int"),
+        UNKNOWN_ENTITY("an entity the index does not know"),
+        REJECTED_AXIOM("an axiom HermiT's normaliser rejects"),
+        REJECTED_ONTOLOGY("an ontology HermiT's normaliser rejects even without the axioms it rejects one by one");
 
         private final String explanation;
 

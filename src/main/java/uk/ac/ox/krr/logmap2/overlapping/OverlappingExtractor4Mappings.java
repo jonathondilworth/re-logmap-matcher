@@ -26,6 +26,7 @@ import org.semanticweb.owlapi.model.IRI;
 import org.semanticweb.owlapi.model.OWLEntity;
 import org.semanticweb.owlapi.model.OWLOntology;
 import org.semanticweb.owlapi.model.OWLDataFactory;
+import org.semanticweb.owlapi.model.parameters.Imports;
 
 import uk.ac.manchester.syntactic_locality.ModuleExtractor;
 import uk.ac.ox.krr.logmap2.Parameters;
@@ -118,8 +119,18 @@ public class OverlappingExtractor4Mappings {
 			if (onto1.getOntologyID().getOntologyIRI().isPresent())
 				uri_onto1 = onto1.getOntologyID().getOntologyIRI().get().toString(); 
 			
+			/**
+			 * JD. Not sure if we want to be including imports or not.
+			 * By the looks of things, this was intended originally? Not sure though.
+			 * Can remove later if changing back to the behaviour of stock LogMap is preferable.
+			 */
+
+			// ModuleExtractor module_extractor1 = new ModuleExtractor(
+			// 		onto1.getAxioms(), SynchronizedOWLManager.createOWLOntologyManager(), false, false, true, true, false);
+			
 			ModuleExtractor module_extractor1 = new ModuleExtractor(
-					onto1.getAxioms(), SynchronizedOWLManager.createOWLOntologyManager(), false, false, true, true, false);
+				onto1.getAxioms(Imports.INCLUDED), SynchronizedOWLManager.createOWLOntologyManager(), false, false, true, true, false);
+
 			module1 = module_extractor1.getLocalityModuleForSignatureGroup(
 					entities1, uri_onto1, false);		
 			
@@ -139,8 +150,18 @@ public class OverlappingExtractor4Mappings {
 			if (onto2.getOntologyID().getOntologyIRI().isPresent())
 				uri_onto2 = onto2.getOntologyID().getOntologyIRI().get().toString();
 		
+			/**
+			 * JD. Not sure if we want to be including imports or not.
+			 * By the looks of things, this was intended originally? Not sure though.
+			 * Can remove later if changing back to the behaviour of stock LogMap is preferable.
+			 */
+
+			// ModuleExtractor module_extractor2 = new ModuleExtractor(
+			// 		onto2.getAxioms(), SynchronizedOWLManager.createOWLOntologyManager(), false, false, true, true, false);
+			
 			ModuleExtractor module_extractor2 = new ModuleExtractor(
-					onto2.getAxioms(), SynchronizedOWLManager.createOWLOntologyManager(), false, false, true, true, false);
+				onto2.getAxioms(Imports.INCLUDED), SynchronizedOWLManager.createOWLOntologyManager(), false, false, true, true, false);
+
 			module2 = module_extractor2.getLocalityModuleForSignatureGroup(
 					entities2, uri_onto2, false);
 			
