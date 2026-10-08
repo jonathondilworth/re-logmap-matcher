@@ -87,7 +87,54 @@ public class LogMap2_RepairFacility {
 		this(onto1, onto2, mappings, false, false, sat_check, "");
 	}
 	
+
+	/**
+	 * Constructor without a cleaning mode: the mode, the bound on alternative supports and the
+	 * indexing reasoner are read from facility_parameters.txt in the working directory (the defaults
+	 * without it). The command line's DEBUGGER mode invokes this one; a caller that passes the mode is
+	 * believed and reads no file
+	 * @param onto1
+	 * @param onto2
+	 * @param mappings
+	 * @param overlapping If the intersection or overlapping of the ontologies are extracted before the repair
+	 * @param chechSatisfiability
+	 * @param outPutFileName
+	 */
+	public LogMap2_RepairFacility(
+			OWLOntology onto1,
+			OWLOntology onto2, 
+			Set<MappingObjectStr> mappings, 
+			boolean overlapping, 
+			boolean chechSatisfiability,
+			String outPutFileName){
+		this(onto1, onto2, mappings, overlapping, chechSatisfiability, outPutFileName, "");
+	}
 	
+	
+	/**
+	 * As above, with the directory that holds facility_parameters.txt ("" for the working directory)
+	 */
+	public LogMap2_RepairFacility(
+			OWLOntology onto1,
+			OWLOntology onto2, 
+			Set<MappingObjectStr> mappings, 
+			boolean overlapping, 
+			boolean chechSatisfiability,
+			String outPutFileName,
+			String settingsDirectory){
+		this(onto1, onto2, mappings, overlapping, twoStepCleaningFromFacilityParameters(settingsDirectory), false, chechSatisfiability, outPutFileName);
+	}
+	
+	
+	//Evaluated before the constructor it is an argument of: the settings are read before the indexing and the first build
+	private static boolean twoStepCleaningFromFacilityParameters(String settingsDirectory){
+		Parameters.readFacilityParameters(settingsDirectory);
+		return Parameters.two_step_cleaning;
+	}
+	
+	
+	
+
 	
 	/**
 	 * Constructor from Java application

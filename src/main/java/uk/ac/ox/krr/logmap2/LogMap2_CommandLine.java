@@ -199,7 +199,7 @@ public class LogMap2_CommandLine {
 						loader2.getOWLOntology(), 
 						readermanager.getMappingObjects(),
 						overlapping,
-						true, //always optimal
+						// true, //always optimal //the cleaning mode comes from facility_parameters.txt (two-step without the file)
 						satisfiability_check,
 						output_path +  "/" + "mappings_repaired_with_LogMap");
 				
